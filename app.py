@@ -446,7 +446,7 @@
 
 # if __name__ == "__main__":
 #     app.run(debug=True)
-
+from sqlalchemy.orm import joinedload
 import os, io, datetime
 from functools import wraps
 
@@ -477,11 +477,23 @@ server = app.server
 server.secret_key = os.environ.get("RMS_SECRET", "dev-secret-key")
 
 # ---------- Helpers ----------
+# def current_user():
+#     if "user_id" not in session:
+#         return None
+#     with SessionLocal() as s:
+#         return s.get(User, session["user_id"])
 def current_user():
     if "user_id" not in session:
         return None
     with SessionLocal() as s:
-        return s.get(User, session["user_id"])
+        # Eager-load the Office relationship so we can safely access user.office after the session closes
+        u = s.query(User).options(joinedload(User.office)).get(session["user_id"])
+        if not u:
+            return None
+        # Touch attributes we’ll need to ensure they’re loaded
+        _ = u.office.name if u.office else None
+        return u
+
 
 def login_required(role: Role | None = None):
     def decorator(fn):
