@@ -587,8 +587,16 @@ else:
     init_db(seed=False)
 
 # Create Dash app (Flask server under the hood)
-app = Dash(__name__, suppress_callback_exceptions=True)
+# app = Dash(__name__, suppress_callback_exceptions=True)
+# server = app.server
+
+# before
+# app = Dash(__name__, suppress_callback_exceptions=True)
+
+# after
+app = Dash(__name__, suppress_callback_exceptions=True, serve_locally=False)
 server = app.server
+
 server.secret_key = os.environ.get("RMS_SECRET", "dev-secret-key")
 
 # ---------- Helpers ----------
@@ -1217,3 +1225,5 @@ def save_profile(n, name, phone):
 # ---------- Run ----------
 if __name__ == "__main__":
     app.run(debug=True)
+
+
