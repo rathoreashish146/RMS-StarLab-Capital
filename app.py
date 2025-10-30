@@ -763,26 +763,33 @@ server.secret_key = os.environ.get("RMS_SECRET", "dev-secret-key")
 
 # ---------- Helpers ----------
 def current_user():
-    if "user_id" not in session:
-        return None
-    with SessionLocal() as s:
-        u = s.query(User).options(joinedload(User.office)).get(session["user_id"])
-        if not u:
+    """Return the flask-session user, or None (never crash the layout)."""
+    try:
+        uid = session.get("user_id")
+        if not uid:
             return None
-        _ = u.office.name if u.office else None
-        return u
+        with SessionLocal() as s:
+            # SQLAlchemy 2.x way:
+            u = s.get(User, uid)
+            if not u:
+                return None
+            # touch relationship so it's loaded in-session
+            _ = u.office.name if u.office else None
+            return u
+    except Exception:
+        return None
 
 def _employee_for_user(user, s):
     if not user or not user.office_id:
         return None
-    # Prefer strict username link
+    # Prefer strict username mapping
     emp = s.query(Employee).filter(
         Employee.office_id == user.office_id,
         Employee.username == user.username
     ).first()
     if emp:
         return emp
-    # Fallback: name==username
+    # Fallback: name matches username
     return s.query(Employee).filter(
         Employee.office_id == user.office_id,
         Employee.name.ilike((user.username or "").strip())
@@ -944,11 +951,11 @@ def profile_layout():
         navbar(),
         html.H3("My Profile"),
         html.Div(id="profile-form"),
-        dcc.ConfirmDialog(id="profile-dialog"),  # we reset this on navigation
+        dcc.ConfirmDialog(id="profile-dialog"),  # reset on nav below
         html.Div(id="profile-msg", style={"color":"crimson", "marginTop":"6px"}),
         html.Hr(),
         html.H4("Remarks from manager"),
-        html.Div(id="profile-remarks")          # <--- remarks list lives here
+        html.Div(id="profile-remarks")
     ])
 
 app.layout = html.Div([dcc.Location(id="url"), html.Div(id="page-content")])
@@ -1037,11 +1044,13 @@ def add_asset(n, name, price, qty, contents, filename):
     user = current_user()
     if not user:
         raise PreventUpdate
+
     name = (name or "").strip()
     try: price_val = float(price)
     except Exception: price_val = 0.0
     try: qty_val = int(qty or 0)
     except Exception: qty_val = 0
+
     if not name:
         return ("Asset name is required.", render_assets_table(), "", False, name, price, qty, contents)
     if price_val <= 0:
@@ -1056,7 +1065,8 @@ def add_asset(n, name, price, qty, contents, filename):
         decoded = base64.b64decode(content_string)
         fname = f"{datetime.datetime.utcnow().timestamp()}_{filename}"
         saved_path = os.path.join(UPLOAD_FOLDER, fname)
-        with open(saved_path, "wb") as f: f.write(decoded)
+        with open(saved_path, "wb") as f:
+            f.write(decoded)
 
     with SessionLocal() as s:
         if user.role == Role.EMP:
@@ -1072,7 +1082,6 @@ def add_asset(n, name, price, qty, contents, filename):
     return ("", render_assets_table(), "Asset added.", True, "", "", 1, None)
 
 def _bill_link(a):
-    # markdown link; Flask route forces download
     if not a.bill_path:
         return ""
     base = os.path.basename(a.bill_path)
@@ -1384,7 +1393,6 @@ def add_remark(n, emp_id, textv):
     return "Remark added."
 
 # ---------- Profile ----------
-# Reset the dialog each time we navigate to /profile so it never pops by itself
 @app.callback(Output("profile-dialog","displayed"),
               Output("profile-dialog","message"),
               Input("url","pathname"))
@@ -1412,7 +1420,6 @@ def load_profile(_):
             html.Button("Save Profile", id="btn-save-profile", n_clicks=0, type="button"),
         ])
 
-# Load the remarks list for the current employee on profile page
 @app.callback(Output("profile-remarks","children"), Input("url","pathname"))
 def load_profile_remarks(_):
     user = current_user()
@@ -1462,3 +1469,4 @@ def save_profile(n, name, phone):
 # ---------- Run ----------
 if __name__ == "__main__":
     app.run(debug=True)
+
