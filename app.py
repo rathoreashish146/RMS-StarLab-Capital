@@ -1624,23 +1624,23 @@ from flask import session, send_from_directory
 
 from db import (
     init_db, SessionLocal, Role, AllocationType, RequestStatus,
-    Office, User, Employee, Asset, Request, Remark,
+    Office, User, Employee, Asset, Request, Remark, engine
 )
 
-# --- Lightweight "migrations" for SQLite ---
-try:
-    from db import engine as _engine  # type: ignore
-    with _engine.connect() as conn:  # type: ignore
-        # add employees.phone if missing
-        cols = conn.execute(text("PRAGMA table_info(employees)")).fetchall()
-        names = {c[1] for c in cols}
-        if "phone" not in names:
-            conn.execute(text("ALTER TABLE employees ADD COLUMN phone VARCHAR"))
-        # add employees.username if missing (used to map login -> employee)
-        if "username" not in names:
-            conn.execute(text("ALTER TABLE employees ADD COLUMN username VARCHAR UNIQUE"))
-except Exception:
-    pass
+# --- tiny migrations (idempotent) ---
+def _safe_add_column(table, coldef):
+    try:
+        with engine.begin() as conn:
+            cols = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
+            names = {c[1] for c in cols}
+            cname = coldef.split()[0]
+            if cname not in names:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {coldef}"))
+    except Exception:
+        pass
+
+_safe_add_column("employees", "phone VARCHAR")
+_safe_add_column("employees", "username VARCHAR")
 
 UPLOAD_FOLDER = os.environ.get("RMS_UPLOAD_DIR", "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -1651,7 +1651,7 @@ if not os.path.exists("rms.db"):
 else:
     init_db(seed=False)
 
-# Dash app (use CDN assets to avoid renderer path issues on Render)
+# Dash
 app = Dash(__name__, suppress_callback_exceptions=True, serve_locally=False)
 server = app.server
 server.secret_key = os.environ.get("RMS_SECRET", "dev-secret-key")
@@ -1668,22 +1668,20 @@ def current_user():
         return u
 
 def _employee_for_user(user, s):
-    """Map a logged-in EMP/OM to their Employee row deterministically."""
     if not user or not user.office_id:
         return None
-    # 1) Try strict username link
+    # strict username link first
     emp = s.query(Employee).filter(
         Employee.office_id == user.office_id,
         Employee.username == user.username
     ).first()
     if emp:
         return emp
-    # 2) Fallback to name==username (legacy or demo seed)
+    # legacy fallback: name == username (if older seed)
     emp = s.query(Employee).filter(
         Employee.office_id == user.office_id,
         Employee.name.ilike((user.username or "").strip())
     ).first()
-    # 3) Last resort: None (avoid random "Alice" fallback)
     return emp
 
 def login_required(role: Role | None = None):
@@ -1708,23 +1706,20 @@ def navbar():
     if not user:
         return html.Nav([])
     if user.role == Role.EMP:
-        items = [
+        return html.Nav([
             dcc.Link("My Assets", href="/assets"), html.Span(" | "),
             dcc.Link("Requests", href="/requests"), html.Span(" | "),
             dcc.Link("My Profile", href="/profile"), html.Span(" | "),
             dcc.Link("Logout", href="/logout"),
-        ]
-        return html.Nav(items, style={"marginBottom": "10px"})
-    # OM / GM
-    items = [
+        ], style={"marginBottom": "10px"})
+    return html.Nav([
         dcc.Link("Dashboard", href="/"), html.Span(" | "),
         dcc.Link("Assets", href="/assets"), html.Span(" | "),
         dcc.Link("Requests", href="/requests"), html.Span(" | "),
         dcc.Link("Employees", href="/employees"), html.Span(" | "),
         dcc.Link("Reports", href="/reports"), html.Span(" | "),
-        dcc.Link("Logout", href="/logout")
-    ]
-    return html.Nav(items, style={"marginBottom": "10px"})
+        dcc.Link("Logout", href="/logout"),
+    ], style={"marginBottom": "10px"})
 
 def login_layout():
     return html.Div([
@@ -1744,25 +1739,14 @@ def dashboard_layout():
     if user.role == Role.EMP:
         return assets_layout()
     scope = "Company-wide" if user.role == Role.GM else f"Office: {user.office.name if user.office else 'N/A'}"
-    return html.Div([
-        navbar(),
-        html.H3(f"Dashboard — {role_name(user.role.value)} ({scope})"),
-        html.Div(id="dashboard-cards"),
-    ])
+    return html.Div([navbar(), html.H3(f"Dashboard — {role_name(user.role.value)} ({scope})"), html.Div(id="dashboard-cards")])
 
 def _uploader_component():
     return dcc.Upload(
         id='upload-bill',
         children=html.Button("Upload Bill / Drag & Drop"),
         multiple=False,
-        style={
-            "border": "2px dashed #bbb",
-            "borderRadius": "10px",
-            "padding": "12px",
-            "display": "inline-block",
-            "cursor": "pointer",
-            "marginBottom": "8px"
-        }
+        style={"border": "2px dashed #bbb","borderRadius": "10px","padding": "12px","display": "inline-block","cursor": "pointer","marginBottom": "8px"}
     )
 
 def assets_layout():
@@ -1831,8 +1815,6 @@ def employees_layout():
     user = current_user()
     if not user:
         return login_layout()
-    if user.role == Role.GM:
-        return html.Div([navbar(), html.Div("Use Admin panel for org-wide employee ops.")])
     if user.role != Role.OM:
         return html.Div([navbar(), html.Div("Only Office Managers can manage employees.")])
     return html.Div([
@@ -1854,18 +1836,11 @@ def profile_layout():
     user = current_user()
     if not user:
         return login_layout()
-    return html.Div([
-        navbar(),
-        html.H3("My Profile"),
-        html.Div(id="profile-form"),
-        dcc.ConfirmDialog(id="profile-dialog"),
-        html.Div(id="profile-msg", style={"color":"crimson", "marginTop":"6px"}),
-    ])
+    return html.Div([navbar(), html.H3("My Profile"), html.Div(id="profile-form"),
+                     dcc.ConfirmDialog(id="profile-dialog"),
+                     html.Div(id="profile-msg", style={"color":"crimson", "marginTop":"6px"})])
 
-app.layout = html.Div([
-    dcc.Location(id="url"),
-    html.Div(id="page-content")
-])
+app.layout = html.Div([dcc.Location(id="url"), html.Div(id="page-content")])
 
 # ---------- Routes ----------
 @app.callback(Output("page-content", "children"), Input("url", "pathname"))
@@ -1876,7 +1851,7 @@ def route(path):
         return login_layout()
     if not user:
         return login_layout()
-    if path == "/" or path is None:
+    if path in ("/", None):
         return dashboard_layout()
     if path == "/assets":
         return assets_layout()
@@ -1909,7 +1884,7 @@ def do_login(n, username, password):
         session["user_id"] = u.id
         return dcc.Location(href="/", id="redir")
 
-# ---------- Dashboard (GM/OM only) ----------
+# ---------- Dashboard ----------
 @app.callback(Output("dashboard-cards", "children"), Input("url", "pathname"))
 def load_kpis(_):
     user = current_user()
@@ -1921,21 +1896,18 @@ def load_kpis(_):
         if user.role == Role.GM:
             total_assets_cost = sum(a.price * a.quantity for a in s.query(Asset).all())
         else:
-            # office cost = office allocated + employee allocated under that office
-            office_emp_ids = [e.id for e in s.query(Employee).filter(Employee.office_id == user.office_id)]
+            emp_ids = [e.id for e in s.query(Employee).filter(Employee.office_id == user.office_id)]
             assets = s.query(Asset).filter(
                 ((Asset.allocation_type == AllocationType.OFFICE) & (Asset.allocation_id == user.office_id)) |
-                ((Asset.allocation_type == AllocationType.EMPLOYEE) & (Asset.allocation_id.in_(office_emp_ids)))
+                ((Asset.allocation_type == AllocationType.EMPLOYEE) & (Asset.allocation_id.in_(emp_ids)))
             ).all()
             total_assets_cost = sum(a.price * a.quantity for a in assets)
-        cards = [
+        return html.Div([
             html.Div([html.H4("Total Asset Cost"), html.H3(f"${total_assets_cost:,.2f}")],
-                     style={"padding": "10px", "border": "1px solid #eee",
-                            "borderRadius": "10px", "display": "inline-block", "marginRight": "10px"})
-        ]
-        return html.Div(cards)
+                     style={"padding":"10px","border":"1px solid #eee","borderRadius":"10px","display":"inline-block"})
+        ])
 
-# ---------- Assets CRUD ----------
+# ---------- Assets ----------
 @app.callback(
     Output("asset-add-msg", "children"),
     Output("assets-table", "children", allow_duplicate=True),
@@ -1954,17 +1926,11 @@ def add_asset(n, name, price, qty, contents, filename):
     user = current_user()
     if not user:
         raise PreventUpdate
-
     name = (name or "").strip()
-    try:
-        price_val = float(price)
-    except Exception:
-        price_val = 0.0
-    try:
-        qty_val = int(qty or 0)
-    except Exception:
-        qty_val = 0
-
+    try: price_val = float(price)
+    except Exception: price_val = 0.0
+    try: qty_val = int(qty or 0)
+    except Exception: qty_val = 0
     if not name:
         return ("Asset name is required.", render_assets_table(), "", False, name, price, qty, contents)
     if price_val <= 0:
@@ -1979,31 +1945,22 @@ def add_asset(n, name, price, qty, contents, filename):
         decoded = base64.b64decode(content_string)
         fname = f"{datetime.datetime.utcnow().timestamp()}_{filename}"
         saved_path = os.path.join(UPLOAD_FOLDER, fname)
-        with open(saved_path, "wb") as f:
-            f.write(decoded)
+        with open(saved_path, "wb") as f: f.write(decoded)
 
     with SessionLocal() as s:
         if user.role == Role.EMP:
             emp = _employee_for_user(user, s)
             if not emp:
                 return ("No employee profile found for you.", render_assets_table(), "", False, name, price, qty, contents)
-            a = Asset(
-                name=name,
-                price=price_val,
-                quantity=qty_val,
-                bill_path=saved_path,
-                allocation_type=AllocationType.EMPLOYEE,
-                allocation_id=emp.id
-            )
-            s.add(a); s.commit()
+            s.add(Asset(name=name, price=price_val, quantity=qty_val, bill_path=saved_path,
+                        allocation_type=AllocationType.EMPLOYEE, allocation_id=emp.id))
+            s.commit()
             return ("", render_assets_table(), "Asset added to your profile.", True, "", "", 1, None)
-
-        a = Asset(name=name, price=price_val, quantity=qty_val, bill_path=saved_path)
-        s.add(a); s.commit()
+        s.add(Asset(name=name, price=price_val, quantity=qty_val, bill_path=saved_path))
+        s.commit()
     return ("", render_assets_table(), "Asset added.", True, "", "", 1, None)
 
 def _bill_link(a):
-    """Return an HTML anchor that triggers a file download."""
     if not a.bill_path:
         return ""
     base = os.path.basename(a.bill_path)
@@ -2021,45 +1978,17 @@ def render_assets_table(_=None):
                 Asset.allocation_type == AllocationType.EMPLOYEE,
                 Asset.allocation_id == emp.id
             ).all()
-            rows = []
-            for i, a in enumerate(assets, start=1):
-                rows.append({
-                    "asset_no": i,
-                    "name": a.name, "price": a.price, "qty": a.quantity,
-                    "bill": _bill_link(a),
-                })
-            cols = [
-                {"name":"asset_no","id":"asset_no"},
-                {"name":"name","id":"name"},
-                {"name":"price","id":"price"},
-                {"name":"qty","id":"qty"},
-                {"name":"bill","id":"bill"},
-            ]
-            return dash_table.DataTable(
-                data=rows, columns=cols, page_size=10, style_table={"overflowX":"auto"},
-                dangerously_allow_html=True
-            )
-        else:
-            assets = s.query(Asset).all()
-            rows = [{
-                "id": a.id, "name": a.name, "price": a.price, "qty": a.quantity,
-                "bill": _bill_link(a),
-                "allocation": a.allocation_type.value,
-                "allocation_id": a.allocation_id
-            } for a in assets]
-            cols = [
-                {"name":"id","id":"id"},
-                {"name":"name","id":"name"},
-                {"name":"price","id":"price"},
-                {"name":"qty","id":"qty"},
-                {"name":"bill","id":"bill"},
-                {"name":"allocation","id":"allocation"},
-                {"name":"allocation_id","id":"allocation_id"},
-            ]
-            return dash_table.DataTable(
-                data=rows, columns=cols, page_size=10, style_table={"overflowX":"auto"},
-                dangerously_allow_html=True
-            )
+            rows = [{"asset_no": i, "name": a.name, "price": a.price, "qty": a.quantity, "bill": _bill_link(a)}
+                    for i, a in enumerate(assets, start=1)]
+            cols = [{"name":x,"id":x} for x in ("asset_no","name","price","qty","bill")]
+            return dash_table.DataTable(data=rows, columns=cols, page_size=10,
+                                        style_table={"overflowX":"auto"}, dangerously_allow_html=True)
+        assets = s.query(Asset).all()
+        rows = [{"id":a.id,"name":a.name,"price":a.price,"qty":a.quantity,"bill":_bill_link(a),
+                 "allocation":a.allocation_type.value,"allocation_id":a.allocation_id} for a in assets]
+        cols = [{"name":x,"id":x} for x in ("id","name","price","qty","bill","allocation","allocation_id")]
+        return dash_table.DataTable(data=rows, columns=cols, page_size=10,
+                                    style_table={"overflowX":"auto"}, dangerously_allow_html=True)
 
 @server.route("/uploads/<path:path>")
 def serve_file(path):
@@ -2077,26 +2006,23 @@ def req_form(_):
             options = [{"label": emp.name, "value": emp.id}] if emp else []
             return html.Div([
                 html.H4("Create Request"),
-                dcc.Dropdown(id="req-employee", options=options,
-                             value=(emp.id if emp else None),
-                             disabled=True, placeholder="Employee"),
+                dcc.Dropdown(id="req-employee", options=options, value=(emp.id if emp else None), disabled=True),
                 dcc.Input(id="req-asset-name", placeholder="Asset name"),
                 dcc.Input(id="req-qty", type="number", value=1),
                 html.Button("Submit Request", id="req-submit", type="button", n_clicks=0),
-                html.Div(id="req-msg", style={"marginTop": "6px", "color":"crimson"})
+                html.Div(id="req-msg", style={"marginTop":"6px","color":"crimson"})
             ])
-        else:
-            employees = s.query(Employee).filter(Employee.office_id == user.office_id).all() \
-                if user.role == Role.OM else s.query(Employee).all()
-            options = [{"label": e.name, "value": e.id} for e in employees]
-            return html.Div([
-                html.H4("Create Request"),
-                dcc.Dropdown(id="req-employee", options=options, placeholder="Employee"),
-                dcc.Input(id="req-asset-name", placeholder="Asset name"),
-                dcc.Input(id="req-qty", type="number", value=1),
-                html.Button("Submit Request", id="req-submit", type="button", n_clicks=0),
-                html.Div(id="req-msg", style={"marginTop": "6px", "color":"crimson"})
-            ])
+        employees = s.query(Employee).filter(Employee.office_id == user.office_id).all() \
+            if user.role == Role.OM else s.query(Employee).all()
+        options = [{"label": e.name, "value": e.id} for e in employees]
+        return html.Div([
+            html.H4("Create Request"),
+            dcc.Dropdown(id="req-employee", options=options, placeholder="Employee"),
+            dcc.Input(id="req-asset-name", placeholder="Asset name"),
+            dcc.Input(id="req-qty", type="number", value=1),
+            html.Button("Submit Request", id="req-submit", type="button", n_clicks=0),
+            html.Div(id="req-msg", style={"marginTop":"6px","color":"crimson"})
+        ])
 
 @app.callback(
     Output("req-msg", "children"),
@@ -2117,39 +2043,26 @@ def create_request(n, emp_id, asset_name, qty):
         raise PreventUpdate
     if not n or n < 1:
         raise PreventUpdate
-
     asset_name = (asset_name or "").strip()
-    try:
-        qty = int(qty or 0)
-    except Exception:
-        qty = 0
+    try: qty = int(qty or 0)
+    except Exception: qty = 0
     if not asset_name:
         return "Please enter an asset name.", render_requests_table(), "", False, asset_name, qty
     if qty < 1:
         return "Quantity must be at least 1.", render_requests_table(), "", False, asset_name, qty
-
     with SessionLocal() as s:
         if user.role == Role.EMP and not emp_id:
             emp = _employee_for_user(user, s)
             emp_id = emp.id if emp else None
         if not emp_id:
             return "Select an employee.", render_requests_table(), "", False, asset_name, qty
-
         emp = s.get(Employee, emp_id)
         if not emp:
             return "Invalid employee.", render_requests_table(), "", False, asset_name, qty
         if user.role == Role.OM and emp.office_id != user.office_id:
             return "You can only submit requests for your office.", render_requests_table(), "", False, asset_name, qty
-
-        r = Request(
-            employee_id=emp.id,
-            office_id=emp.office_id,
-            asset_name=asset_name,
-            quantity=qty
-        )
-        s.add(r)
+        s.add(Request(employee_id=emp.id, office_id=emp.office_id, asset_name=asset_name, quantity=qty))
         s.commit()
-
     return "", render_requests_table(), "Request submitted.", True, "", 1
 
 @app.callback(Output("requests-table", "children"), Input("url", "pathname"))
@@ -2163,28 +2076,23 @@ def render_requests_table(_=None):
             q = q.filter(Request.office_id == user.office_id)
         elif user.role == Role.EMP:
             emp = _employee_for_user(user, s)
-            q = q.filter(Request.employee_id == emp.id) if emp else q.filter(Request.id == -1)
+            q = q.filter(Request.employee_id == (emp.id if emp else -1))
         rows = q.order_by(Request.created_at.desc()).all()
-        data = [{
-            "id": r.id, "employee_id": r.employee_id, "office_id": r.office_id, "asset": r.asset_name,
-            "qty": r.quantity, "status": r.status.value, "remark": r.remark or "", "created_at": r.created_at.strftime("%Y-%m-%d %H:%M")
-        } for r in rows]
-    cols = [{"name": n, "id": n} for n in ["id", "employee_id", "office_id", "asset", "qty", "status", "remark", "created_at"]]
+        data = [{"id":r.id,"employee_id":r.employee_id,"office_id":r.office_id,"asset":r.asset_name,
+                 "qty":r.quantity,"status":r.status.value,"remark":r.remark or "",
+                 "created_at": r.created_at.strftime("%Y-%m-%d %H:%M")} for r in rows]
+    cols = [{"name": n, "id": n} for n in ["id","employee_id","office_id","asset","qty","status","remark","created_at"]]
 
-    user = current_user()
     controls = html.Div([
-        dcc.Textarea(id="mgr-remark", placeholder="Remark…", style={"width": "100%", "height": "60px"}),
+        dcc.Textarea(id="mgr-remark", placeholder="Remark…", style={"width":"100%","height":"60px"}),
         html.Button("Approve", id="btn-approve"),
         html.Button("Reject", id="btn-reject"),
         html.Button("Mark Return Pending", id="btn-return-pending"),
         html.Button("Mark Returned", id="btn-returned"),
-        html.Div(id="req-action-msg", style={"marginTop": "6px"})
-    ]) if user and user.role in (Role.GM, Role.OM) else html.Div()
+        html.Div(id="req-action-msg", style={"marginTop":"6px"})
+    ]) if user.role in (Role.GM, Role.OM) else html.Div()
 
-    return html.Div([
-        dash_table.DataTable(data=data, columns=cols, id="req-table", row_selectable="single", page_size=10),
-        controls
-    ])
+    return html.Div([dash_table.DataTable(data=data, columns=cols, id="req-table", row_selectable="single", page_size=10), controls])
 
 @app.callback(Output("req-action-msg", "children", allow_duplicate=True),
               Input("btn-approve", "n_clicks"),
@@ -2230,8 +2138,7 @@ def handle_request_update(selected, data, remark, status):
         if user.role == Role.OM and r.office_id != user.office_id:
             return "You can only update requests in your office."
         r.status = status
-        if remark:
-            r.remark = remark
+        if remark: r.remark = remark
         s.commit()
     return f"Status updated to {status.value}."
 
@@ -2272,29 +2179,18 @@ def add_employee(n, name, phone, uname, pwd):
     if not name or not uname or not pwd:
         return ("Name, username and password are required.", "", False, name, phone, uname, pwd)
     with SessionLocal() as s:
-        # username must be unique among users AND employees.username we maintain
         if s.query(User).filter(User.username == uname).first():
             return ("Username already exists.", "", False, name, phone, uname, pwd)
-        emp = Employee(name=name, office_id=user.office_id)
-        try:
-            setattr(emp, "phone", (phone or "").strip())
-        except Exception:
-            pass
-        try:
-            setattr(emp, "username", uname)
-        except Exception:
-            pass
+        emp = Employee(name=name, office_id=user.office_id, username=uname)
+        try: emp.phone = (phone or "").strip()
+        except Exception: pass
         s.add(emp); s.flush()
-        new_user = User(username=uname,
-                        password_hash=generate_password_hash(pwd),
-                        role=Role.EMP,
-                        office_id=user.office_id)
-        s.add(new_user)
+        s.add(User(username=uname, password_hash=generate_password_hash(pwd),
+                   role=Role.EMP, office_id=user.office_id))
         s.commit()
-    # clear inputs + popup
     return ("", "Employee created and login set.", True, "", "", "", "")
 
-# ---------- Reports (OM) ----------
+# ---------- Reports ----------
 @app.callback(Output("reports-content","children"), Input("url","pathname"))
 def render_reports(_):
     user = current_user()
@@ -2302,7 +2198,6 @@ def render_reports(_):
         raise PreventUpdate
     with SessionLocal() as s:
         if user.role == Role.OM:
-            # office scope
             emp_ids = [e.id for e in s.query(Employee).filter(Employee.office_id == user.office_id)]
             office_assets = s.query(Asset).filter(
                 ((Asset.allocation_type == AllocationType.OFFICE) & (Asset.allocation_id == user.office_id)) |
@@ -2310,16 +2205,13 @@ def render_reports(_):
             ).all()
             office_count = len(office_assets)
             office_cost = sum(a.price * a.quantity for a in office_assets)
-
             emp_options = [{"label": e.name, "value": e.id} for e in s.query(Employee).filter(Employee.office_id == user.office_id)]
         else:
-            # GM aggregate
             office_assets = s.query(Asset).all()
             office_count = len(office_assets)
             office_cost = sum(a.price * a.quantity for a in office_assets)
             emp_options = [{"label": e.name, "value": e.id} for e in s.query(Employee)]
-
-    kpis = html.Div([
+    return html.Div([
         html.Div([html.B("Assets allocated to my office: "), f"{office_count}"]),
         html.Div([html.B("Total asset cost for my office: "), f"${office_cost:,.2f}"]),
         html.Hr(),
@@ -2331,25 +2223,17 @@ def render_reports(_):
         dcc.Dropdown(id="rep-emp-remark", options=emp_options, placeholder="Select employee"),
         dcc.Textarea(id="rep-remark-text", placeholder="Write a remark...", style={"width":"100%","height":"80px"}),
         html.Button("Add Remark", id="rep-add-remark"),
-        html.Div(id="rep-remark-msg", style={"marginTop":"6px", "color":"crimson"})
+        html.Div(id="rep-remark-msg", style={"marginTop":"6px","color":"crimson"})
     ])
 
-    return kpis
-
-@app.callback(Output("rep-emp-kpis","children"),
-              Input("rep-emp","value"),
-              prevent_initial_call=True)
+@app.callback(Output("rep-emp-kpis","children"), Input("rep-emp","value"), prevent_initial_call=True)
 def per_employee_kpis(emp_id):
     user = current_user()
-    if not user:
+    if not user or not emp_id:
         raise PreventUpdate
-    if not emp_id:
-        return ""
     with SessionLocal() as s:
-        assets = s.query(Asset).filter(
-            Asset.allocation_type == AllocationType.EMPLOYEE,
-            Asset.allocation_id == emp_id
-        ).all()
+        assets = s.query(Asset).filter(Asset.allocation_type == AllocationType.EMPLOYEE,
+                                       Asset.allocation_id == emp_id).all()
         count = len(assets)
         pending = sum(1 for a in assets if not a.returned)
         cost = sum(a.price * a.quantity for a in assets)
@@ -2371,8 +2255,8 @@ def add_remark(n, emp_id, textv):
     if not emp_id or not (textv or "").strip():
         return "Select an employee and enter a remark."
     with SessionLocal() as s:
-        r = Remark(author_user_id=user.id, target_type="EMPLOYEE", target_id=int(emp_id), content=(textv or "").strip())
-        s.add(r); s.commit()
+        s.add(Remark(author_user_id=user.id, target_type="EMPLOYEE", target_id=int(emp_id), content=(textv or "").strip()))
+        s.commit()
     return "Remark added."
 
 # ---------- Profile ----------
@@ -2395,20 +2279,16 @@ def load_profile(_):
             html.Button("Save Profile", id="btn-save-profile", n_clicks=0, type="button"),
         ])
 
-@app.callback(
-    Output("profile-dialog","message"),
-    Output("profile-dialog","displayed"),
-    Output("profile-msg","children"),
-    Input("btn-save-profile","n_clicks"),
-    State("profile-emp-name","value"),
-    State("profile-phone","value"),
-    prevent_initial_call=True
-)
+@app.callback(Output("profile-dialog","message"),
+              Output("profile-dialog","displayed"),
+              Output("profile-msg","children"),
+              Input("btn-save-profile","n_clicks"),
+              State("profile-emp-name","value"),
+              State("profile-phone","value"),
+              prevent_initial_call=True)
 def save_profile(n, name, phone):
     user = current_user()
     if not user:
-        raise PreventUpdate
-    if not n or n < 1:
         raise PreventUpdate
     name = (name or "").strip()
     phone = (phone or "").strip()
@@ -2419,10 +2299,8 @@ def save_profile(n, name, phone):
         if not emp:
             return "", False, "No employee record."
         emp.name = name
-        try:
-            setattr(emp, "phone", phone)
-        except Exception:
-            pass
+        try: emp.phone = phone
+        except Exception: pass
         s.commit()
     return "Profile updated.", True, ""
 
