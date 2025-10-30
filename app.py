@@ -953,32 +953,27 @@
 # if __name__ == "__main__":
 #     app.run(debug=True)
 
-
 # app.py
 from sqlalchemy.orm import joinedload
 from sqlalchemy import text
 import os, datetime, types
 from functools import wraps
-
 import dash
 from dash import Dash, html, dcc, Input, Output, State, dash_table
 from dash.exceptions import PreventUpdate
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask import session, send_from_directory
-
 from db import (
     init_db, SessionLocal, Role, AllocationType, RequestStatus,
     Office, User, Employee, Asset, Request, Remark, engine
 )
 
-# --------------------------- tiny idempotent migrations ---------------------------
+# ---------------- DB Migration ----------------
 def _safe_add_column(table, coldef):
     try:
         with engine.begin() as conn:
             cols = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
-            names = {c[1] for c in cols}
-            cname = coldef.split()[0]
-            if cname not in names:
+            if coldef.split()[0] not in {c[1] for c in cols}:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {coldef}"))
     except Exception:
         pass
@@ -989,844 +984,185 @@ _safe_add_column("employees", "username VARCHAR")
 UPLOAD_FOLDER = os.environ.get("RMS_UPLOAD_DIR", "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Initialize DB once
 if not os.path.exists("rms.db"):
     init_db(seed=True)
 else:
     init_db(seed=False)
 
-# --------------------------- Dash ---------------------------
+# ---------------- Dash Setup ----------------
 app = Dash(__name__, suppress_callback_exceptions=True, serve_locally=False)
 server = app.server
 server.secret_key = os.environ.get("RMS_SECRET", "dev-secret-key")
 
-# --------------------------- helpers ---------------------------
+# ---------------- Helpers ----------------
 def _snapshot_user(u):
-    """
-    Return a detached, lightweight snapshot so we never access lazy attributes
-    outside a session (avoids DetachedInstanceError).
-    """
     snap = types.SimpleNamespace()
-    snap.id = u.id
-    snap.username = u.username
-    snap.role = u.role
-    snap.office_id = u.office_id
-    # light 'office' proxy with id/name if exists
-    if u.office:
-        snap.office = types.SimpleNamespace(id=u.office.id, name=u.office.name)
-    else:
-        snap.office = None
+    snap.id, snap.username, snap.role, snap.office_id = u.id, u.username, u.role, u.office_id
+    snap.office = types.SimpleNamespace(id=u.office.id, name=u.office.name) if u.office else None
     return snap
 
 def current_user():
     if "user_id" not in session:
         return None
     with SessionLocal() as s:
-        # IMPORTANT: use filter + joinedload, not Query.get (which ignores options)
-        u = (
-            s.query(User)
-            .options(joinedload(User.office))
-            .filter(User.id == session["user_id"])
-            .one_or_none()
-        )
+        u = s.query(User).options(joinedload(User.office)).filter(User.id == session["user_id"]).one_or_none()
         return _snapshot_user(u) if u else None
 
 def _employee_for_user(user, s):
     if not user or not user.office_id:
         return None
-    # Prefer strict username mapping
-    emp = s.query(Employee).filter(
-        Employee.office_id == user.office_id,
-        Employee.username == user.username
-    ).first()
-    if emp:
-        return emp
-    # Legacy fallback (name == username)
-    return s.query(Employee).filter(
-        Employee.office_id == user.office_id,
-        Employee.name.ilike((user.username or "").strip())
-    ).first()
-
-def login_required(role: Role | None = None):
-    def decorator(fn):
-        @wraps(fn)
-        def wrapper(*args, **kwargs):
-            user = current_user()
-            if not user:
-                raise PreventUpdate
-            if role and user.role != role:
-                raise PreventUpdate
-            return fn(*args, **kwargs)
-        return wrapper
-    return decorator
+    emp = s.query(Employee).filter(Employee.office_id == user.office_id, Employee.username == user.username).first()
+    return emp or s.query(Employee).filter(Employee.office_id == user.office_id, Employee.name.ilike(user.username)).first()
 
 def role_name(role):
     return {"GM": "General Manager", "OM": "Office Manager", "EMP": "Employee"}[role]
 
-# --------------------------- styling ---------------------------
-BASE_STYLE = html.Style("""
-:root { --bg:#0c1222; --card:#121a2e; --muted:#8aa0c8; --accent:#6aa2ff; --good:#2dd4bf; --warn:#f59e0b; --bad:#ef4444; }
-* { box-sizing:border-box; }
-body { background:var(--bg); color:white; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial; }
-a { color: var(--accent); text-decoration:none; }
-nav { margin: 14px 0 8px 0; }
-nav a { padding:6px 10px; background:var(--card); border-radius:8px; margin-right:6px; }
-.card { background:var(--card); border-radius:14px; padding:14px; box-shadow: 0 6px 24px rgba(0,0,0,.2); }
-.stack { display:flex; gap:12px; flex-wrap:wrap; }
-.kpi { background:var(--card); border:1px solid rgba(255,255,255,.06); border-radius:12px; padding:16px 18px; min-width:190px; }
-.kpi .label { color:var(--muted); font-size:.85rem; }
-.kpi .value { font-size:1.4rem; font-weight:700; margin-top:4px; }
-h2,h3,h4 { margin:10px 0; }
-input, textarea, select, .dash-dropdown, .dash-table-container  {
-  color:white !important;
-}
-.dash-table-container .dash-spreadsheet-container { background:transparent; }
-.dash-table-container .dash-spreadsheet-inner table { background:transparent; color:white; }
-.dash-table-container .dash-spreadsheet-container .dash-spreadsheet .row-headers {
-  background:transparent;
-}
-.dash-table-container .dash-spreadsheet-container .dash-spreadsheet td, 
-.dash-table-container .dash-spreadsheet-container .dash-spreadsheet th {
-  border-color: rgba(255,255,255,.08);
-}
-.button, button {
-  background: linear-gradient(90deg, var(--accent), #9c7cff);
-  color:white; border:none; padding:8px 12px; border-radius:10px; cursor:pointer;
-}
-hr { border:0; border-top:1px solid rgba(255,255,255,.08); margin:14px 0; }
-.container { max-width: 1100px; margin: 0 auto; padding: 10px 14px; }
+# ---------------- CSS ----------------
+BASE_STYLE = html.Link(
+    rel="stylesheet",
+    href="https://cdn.jsdelivr.net/npm/modern-normalize@2.0.0/modern-normalize.min.css"
+)
+CUSTOM_CSS = html.Style("""
+:root { --bg:#0c1222; --card:#121a2e; --accent:#6aa2ff; --text:#dbeafe; --bad:#ef4444; }
+body { background:var(--bg); color:var(--text); font-family:Inter,Segoe UI,Roboto; margin:0; }
+nav a { margin-right:10px; background:#1a2238; color:#fff; padding:6px 10px; border-radius:8px; text-decoration:none; }
+.card { background:var(--card); padding:14px; border-radius:12px; box-shadow:0 4px 14px rgba(0,0,0,.4); }
+button, .button { background:linear-gradient(90deg,var(--accent),#9c7cff); border:none; color:white; padding:8px 14px; border-radius:8px; cursor:pointer; }
 """)
 
-# --------------------------- layouts ---------------------------
+# ---------------- Layouts ----------------
 def navbar():
     user = current_user()
     if not user:
         return html.Nav([])
     items = []
     if user.role == Role.EMP:
-        items += [dcc.Link("My Assets", href="/assets"),
-                  dcc.Link("Requests", href="/requests"),
-                  dcc.Link("My Profile", href="/profile"),
-                  dcc.Link("Logout", href="/logout")]
+        items += [dcc.Link("My Assets", href="/assets"), dcc.Link("Requests", href="/requests"), dcc.Link("My Profile", href="/profile"), dcc.Link("Logout", href="/logout")]
     else:
-        items += [dcc.Link("Dashboard", href="/"),
-                  dcc.Link("Assets", href="/assets"),
-                  dcc.Link("Requests", href="/requests")]
-        if user.role == Role.OM:
-            items += [dcc.Link("Employees", href="/employees")]
-        if user.role == Role.GM:
-            items += [dcc.Link("Admin", href="/admin")]
-        items += [dcc.Link("Reports", href="/reports"),
-                  dcc.Link("Logout", href="/logout")]
-    return html.Nav(items)
+        items += [dcc.Link("Dashboard", href="/"), dcc.Link("Assets", href="/assets"), dcc.Link("Requests", href="/requests")]
+        if user.role == Role.OM: items.append(dcc.Link("Employees", href="/employees"))
+        if user.role == Role.GM: items.append(dcc.Link("Admin", href="/admin"))
+        items += [dcc.Link("Reports", href="/reports"), dcc.Link("Logout", href="/logout")]
+    return html.Nav(items, style={"margin":"12px 0"})
 
 def login_layout():
-    return html.Div(className="container", children=[
-        BASE_STYLE,
+    return html.Div([BASE_STYLE, CUSTOM_CSS,
         html.H2("Resource Management System — Login"),
         html.Div(className="card", children=[
             dcc.Input(id="login-username", placeholder="Username"),
-            dcc.Input(id="login-password", type="password", placeholder="Password", style={"marginLeft":"8px"}),
-            html.Button("Login", id="login-btn", style={"marginLeft":"8px"}),
-            html.Div(id="login-msg", style={"color":"#fda4af", "marginTop":"8px"}),
-            html.Hr(),
-            html.Div("Default demo users: admin/admin, om_east/om_east, alice/alice", style={"color":"#9fb3da"})
-        ]),
-    ])
+            dcc.Input(id="login-password", type="password", placeholder="Password", style={"marginLeft":"6px"}),
+            html.Button("Login", id="login-btn", style={"marginLeft":"6px"}),
+            html.Div(id="login-msg", style={"color":"var(--bad)", "marginTop":"8px"})
+        ])
+    ], style={"maxWidth":"500px", "margin":"50px auto"})
 
-def dashboard_layout():
-    user = current_user()
-    if not user:
-        return login_layout()
-    scope = "Company-wide" if user.role == Role.GM else f"Office: {user.office.name if user.office else 'N/A'}"
-    return html.Div(className="container", children=[
-        BASE_STYLE, navbar(),
-        html.H3(f"Dashboard — {role_name(user.role.value)} ({scope})"),
-        html.Div(id="dashboard-cards"),
-    ])
+app.layout = html.Div([BASE_STYLE, CUSTOM_CSS, dcc.Location(id="url"), html.Div(id="page-content")])
 
-def _uploader_component():
-    return dcc.Upload(
-        id='upload-bill',
-        children=html.Button("Upload Bill / Drag & Drop"),
-        multiple=False,
-        style={
-            "border": "2px dashed rgba(255,255,255,.18)",
-            "borderRadius": "10px",
-            "padding": "12px",
-            "display": "inline-block",
-            "cursor": "pointer",
-            "marginBottom": "8px"
-        }
-    )
-
-def assets_layout():
-    user = current_user()
-    if not user:
-        return login_layout()
-    heading = "My Assets" if user.role == Role.EMP else "Assets"
-    button_text = "Add to My Profile" if user.role == Role.EMP else "Add Asset"
-    return html.Div(className="container", children=[
-        BASE_STYLE, navbar(), html.H3(heading),
-        html.Div(className="card", children=[
-            _uploader_component(),
-            dcc.Input(id="asset-name", placeholder="Asset name *", style={"marginRight":"6px"}),
-            dcc.Input(id="asset-price", placeholder="Price *", type="number", style={"marginRight":"6px"}),
-            dcc.Input(id="asset-qty", placeholder="Quantity *", type="number", value=1, style={"marginRight":"6px", "width":"120px"}),
-            html.Button(button_text, id="add-asset-btn"),
-            html.Div(id="asset-add-msg", style={"color":"#fda4af", "marginTop":"6px"}),
-            dcc.ConfirmDialog(id="asset-dialog"),
-        ]),
-        html.Hr(),
-        html.H4(f"{heading} Table"),
-        html.Div(id="assets-table")
-    ])
-
-def requests_layout():
-    user = current_user()
-    if not user:
-        return login_layout()
-    return html.Div(className="container", children=[
-        BASE_STYLE, navbar(),
-        html.H3("Requests"),
-        html.Div(className="card", id="request-form"),
-        dcc.ConfirmDialog(id="req-dialog"),
-        html.Hr(),
-        html.H4("Open Requests"),
-        html.Div(id="requests-table")
-    ])
-
-def reports_layout():
-    user = current_user()
-    if not user:
-        return login_layout()
-    if user.role == Role.EMP:
-        return html.Div(className="container", children=[BASE_STYLE, navbar(),
-            html.Div(className="card", children=["Reports are not available for Employees."])])
-    return html.Div(className="container", children=[
-        BASE_STYLE, navbar(),
-        html.H3("Reports"),
-        html.Div(className="card", id="reports-content"),
-        dcc.ConfirmDialog(id="reports-dialog"),
-        html.Div(id="reports-msg", style={"color":"#fda4af", "marginTop":"6px"}),
-    ])
-
-def employees_layout():
-    user = current_user()
-    if not user:
-        return login_layout()
-    if user.role != Role.OM:
-        return html.Div(className="container", children=[BASE_STYLE, navbar(),
-            html.Div(className="card", children=["Only Office Managers can manage employees."])])
-    return html.Div(className="container", children=[
-        BASE_STYLE, navbar(),
-        html.H3("Manage Employees"),
-        html.Div(className="card", children=[
-            dcc.Input(id="emp-new-name", placeholder="Employee name *", style={"width":"280px","marginRight":"6px"}),
-            dcc.Input(id="emp-new-phone", placeholder="Phone", style={"width":"220px","marginRight":"6px"}),
-            dcc.Input(id="emp-new-username", placeholder="Username *", style={"width":"220px","marginRight":"6px"}),
-            dcc.Input(id="emp-new-password", placeholder="Password *", style={"width":"180px","marginRight":"6px"}),
-            html.Button("Add Employee", id="emp-add-btn"),
-            dcc.ConfirmDialog(id="emp-dialog"),
-            html.Div(id="emp-add-msg", style={"color":"#fda4af", "marginTop":"6px"}),
-        ]),
-        html.Hr(),
-        html.H4("Employees in My Office"),
-        html.Div(id="emp-table", className="card")
-    ])
-
-def profile_layout():
-    user = current_user()
-    if not user:
-        return login_layout()
-    return html.Div(className="container", children=[
-        BASE_STYLE, navbar(), html.H3("My Profile"),
-        html.Div(className="card", id="profile-form"),
-        dcc.ConfirmDialog(id="profile-dialog"),
-        html.Div(id="profile-msg", style={"color":"#fda4af", "marginTop":"6px"}),
-    ])
-
-def admin_layout():
-    user = current_user()
-    if not user or user.role != Role.GM:
-        return login_layout()
-    return html.Div(className="container", children=[
-        BASE_STYLE, navbar(),
-        html.H3("Admin — Offices & Managers"),
-        html.Div(className="card", children=[
-            html.H4("Create Office & Assign Office Manager"),
-            dcc.Input(id="adm-office-name", placeholder="Office name *", style={"marginRight":"6px"}),
-            dcc.Input(id="adm-om-username", placeholder="OM username *", style={"marginRight":"6px"}),
-            dcc.Input(id="adm-om-password", placeholder="OM password *", style={"marginRight":"6px"}),
-            html.Button("Create Office + Manager", id="adm-create-office"),
-            dcc.ConfirmDialog(id="adm-dialog"),
-            html.Div(id="adm-msg", style={"color":"#fda4af", "marginTop":"6px"}),
-        ]),
-        html.Hr(),
-        html.H4("All Offices"),
-        html.Div(id="adm-offices", className="card")
-    ])
-
-app.layout = html.Div([dcc.Location(id="url"), html.Div(id="page-content")])
-
-# --------------------------- routes ---------------------------
-@app.callback(Output("page-content", "children"), Input("url", "pathname"))
+# ---------------- Routing ----------------
+@app.callback(Output("page-content","children"), Input("url","pathname"))
 def route(path):
     user = current_user()
-    if path == "/logout":
-        session.clear()
-        return login_layout()
-    if not user:
-        return login_layout()
-    if path in ("/", None):
-        return dashboard_layout()
-    if path == "/assets":
-        return assets_layout()
-    if path == "/requests":
-        return requests_layout()
-    if path == "/reports":
-        return reports_layout()
-    if path == "/employees":
-        return employees_layout()
-    if path == "/profile":
-        return profile_layout()
-    if path == "/admin":
-        return admin_layout()
-    return html.Div(className="container", children=[BASE_STYLE, navbar(), html.H3("Not Found")])
+    if path == "/logout": session.clear(); return login_layout()
+    if not user: return login_layout()
+    from_pages = {
+        "/": dashboard_layout, "/assets": assets_layout, "/requests": requests_layout,
+        "/reports": reports_layout, "/employees": employees_layout,
+        "/profile": profile_layout, "/admin": admin_layout
+    }
+    return from_pages.get(path, lambda: html.Div("Not Found"))()
 
-# --------------------------- login ---------------------------
-@app.callback(Output("login-msg", "children"), Input("login-btn", "n_clicks"),
-              State("login-username", "value"), State("login-password", "value"),
+# ---------------- Login ----------------
+@app.callback(Output("login-msg","children"), Input("login-btn","n_clicks"),
+              State("login-username","value"), State("login-password","value"),
               prevent_initial_call=True)
-def do_login(n, username, password):
-    uname = (username or "").strip()
-    pwd = (password or "")
+def login(_, uname, pwd):
     with SessionLocal() as s:
-        u = s.query(User).filter(User.username == uname).first()
-        if not u and s.query(User).count() == 0:
-            s.close()
-            init_db(seed=True)
-            with SessionLocal() as s2:
-                u = s2.query(User).filter(User.username == uname).first()
-        if not u or not check_password_hash(u.password_hash, pwd):
+        u = s.query(User).filter(User.username == (uname or "").strip()).first()
+        if not u or not check_password_hash(u.password_hash, (pwd or "")):
             return "Invalid credentials"
         session["user_id"] = u.id
         return dcc.Location(href="/", id="redir")
 
-# --------------------------- dashboard KPIs (scoped) ---------------------------
-@app.callback(Output("dashboard-cards", "children"), Input("url", "pathname"))
-def load_kpis(_):
+# ---------------- Dashboard ----------------
+def dashboard_layout():
     user = current_user()
-    if not user:
-        raise PreventUpdate
-
     with SessionLocal() as s:
         if user.role == Role.GM:
             assets = s.query(Asset).all()
         elif user.role == Role.OM:
-            emp_ids = [e.id for e in s.query(Employee).filter(Employee.office_id == user.office_id)]
-            assets = s.query(Asset).filter(
-                ((Asset.allocation_type == AllocationType.OFFICE) & (Asset.allocation_id == user.office_id)) |
-                ((Asset.allocation_type == AllocationType.EMPLOYEE) & (Asset.allocation_id.in_(emp_ids)))
-            ).all()
+            emp_ids = [e.id for e in s.query(Employee).filter(Employee.office_id==user.office_id)]
+            assets = s.query(Asset).filter(((Asset.allocation_type==AllocationType.OFFICE)&(Asset.allocation_id==user.office_id))|
+                                           ((Asset.allocation_type==AllocationType.EMPLOYEE)&(Asset.allocation_id.in_(emp_ids)))).all()
         else:
             emp = _employee_for_user(user, s)
-            assets = [] if not emp else s.query(Asset).filter(
-                Asset.allocation_type == AllocationType.EMPLOYEE,
-                Asset.allocation_id == emp.id
-            ).all()
-
-        count = len(assets)
-        pending = sum(1 for a in assets if not a.returned)
-        total_cost = sum(a.price * a.quantity for a in assets)
-
-    return html.Div(className="stack", children=[
-        html.Div(className="kpi", children=[html.Div("Assets", className="label"), html.Div(count, className="value")]),
-        html.Div(className="kpi", children=[html.Div("Pending Returns", className="label"), html.Div(pending, className="value")]),
-        html.Div(className="kpi", children=[html.Div("Total Cost", className="label"), html.Div(f"${total_cost:,.2f}", className="value")]),
+            assets = s.query(Asset).filter(Asset.allocation_id==emp.id).all() if emp else []
+    cost = sum(a.price*a.quantity for a in assets)
+    return html.Div([navbar(),
+        html.Div(className="stack", children=[
+            html.Div(className="card", children=[html.B("Assets:"), html.Div(len(assets))]),
+            html.Div(className="card", children=[html.B("Total Cost:"), html.Div(f"${cost:,.2f}")])
+        ])
     ])
 
-# --------------------------- assets ---------------------------
-@app.callback(
-    Output("asset-add-msg", "children"),
-    Output("assets-table", "children", allow_duplicate=True),
-    Output("asset-dialog", "message"),
-    Output("asset-dialog", "displayed"),
-    Output("asset-name", "value"),
-    Output("asset-price", "value"),
-    Output("asset-qty", "value"),
-    Output("upload-bill", "contents"),
-    Input("add-asset-btn", "n_clicks"),
-    State("asset-name", "value"), State("asset-price", "value"), State("asset-qty", "value"),
-    State("upload-bill", "contents"), State("upload-bill", "filename"),
-    prevent_initial_call=True
-)
-def add_asset(n, name, price, qty, contents, filename):
+# ---------------- Assets ----------------
+def assets_layout():
+    return html.Div([navbar(),
+        html.H3("Assets"),
+        html.Div(id="assets-table")
+    ])
+
+@app.callback(Output("assets-table","children"), Input("url","pathname"))
+def render_assets(_):
     user = current_user()
-    if not user:
-        raise PreventUpdate
-
-    name = (name or "").strip()
-    try: price_val = float(price)
-    except Exception: price_val = 0.0
-    try: qty_val = int(qty or 0)
-    except Exception: qty_val = 0
-
-    if not name:
-        return ("Asset name is required.", render_assets_table(), "", False, name, price, qty, contents)
-    if price_val <= 0:
-        return ("Price must be greater than 0.", render_assets_table(), "", False, name, price, qty, contents)
-    if qty_val < 1:
-        return ("Quantity must be at least 1.", render_assets_table(), "", False, name, price, qty, contents)
-
-    saved_path = None
-    if contents and filename:
-        import base64
-        _, content_string = contents.split(',')
-        decoded = base64.b64decode(content_string)
-        fname = f"{datetime.datetime.utcnow().timestamp()}_{filename}"
-        saved_path = os.path.join(UPLOAD_FOLDER, fname)
-        with open(saved_path, "wb") as f: f.write(decoded)
-
     with SessionLocal() as s:
-        if user.role == Role.EMP:
-            emp = _employee_for_user(user, s)
-            if not emp:
-                return ("No employee profile found for you.", render_assets_table(), "", False, name, price, qty, contents)
-            s.add(Asset(name=name, price=price_val, quantity=qty_val, bill_path=saved_path,
-                        allocation_type=AllocationType.EMPLOYEE, allocation_id=emp.id))
-            s.commit()
-            return ("", render_assets_table(), "Asset added to your profile.", True, "", "", 1, None)
-        else:
-            s.add(Asset(name=name, price=price_val, quantity=qty_val, bill_path=saved_path))
-            s.commit()
-    return ("", render_assets_table(), "Asset added.", True, "", "", 1, None)
-
-def _bill_link(a):
-    if not a.bill_path:
-        return ""
-    base = os.path.basename(a.bill_path)
-    return f"[{base}](/uploads/{base})"
-
-@app.callback(Output("assets-table", "children"), Input("url", "pathname"))
-def render_assets_table(_=None):
-    user = current_user()
-    if not user:
-        raise PreventUpdate
-
-    with SessionLocal() as s:
-        if user.role == Role.EMP:
-            emp = _employee_for_user(user, s)
-            assets = [] if not emp else s.query(Asset).filter(
-                Asset.allocation_type == AllocationType.EMPLOYEE,
-                Asset.allocation_id == emp.id
-            ).all()
-            rows = [{"asset_no": i, "name": a.name, "price": a.price, "qty": a.quantity, "bill": _bill_link(a)}
-                    for i, a in enumerate(assets, start=1)]
-            cols = [
-                {"name":"asset_no","id":"asset_no"},
-                {"name":"name","id":"name"},
-                {"name":"price","id":"price"},
-                {"name":"qty","id":"qty"},
-                {"name":"bill","id":"bill","presentation":"markdown"},
-            ]
-            return dash_table.DataTable(data=rows, columns=cols, page_size=10, style_table={"overflowX":"auto"})
-
-        elif user.role == Role.OM:
-            emp_ids = [e.id for e in s.query(Employee).filter(Employee.office_id == user.office_id)]
-            assets = s.query(Asset).filter(
-                ((Asset.allocation_type == AllocationType.OFFICE) & (Asset.allocation_id == user.office_id)) |
-                ((Asset.allocation_type == AllocationType.EMPLOYEE) & (Asset.allocation_id.in_(emp_ids)))
-            ).all()
-        else:
-            assets = s.query(Asset).all()
-
-        rows = [{"id": a.id, "name": a.name, "price": a.price, "qty": a.quantity,
-                 "bill": _bill_link(a), "allocation": a.allocation_type.value,
-                 "allocation_id": a.allocation_id}
-                for a in assets]
-        cols = [
-            {"name":"id","id":"id"},
-            {"name":"name","id":"name"},
-            {"name":"price","id":"price"},
-            {"name":"qty","id":"qty"},
-            {"name":"bill","id":"bill","presentation":"markdown"},
-            {"name":"allocation","id":"allocation"},
-            {"name":"allocation_id","id":"allocation_id"},
-        ]
-        return dash_table.DataTable(data=rows, columns=cols, page_size=10, style_table={"overflowX":"auto"})
-
-@server.route("/uploads/<path:path>")
-def serve_file(path):
-    return send_from_directory(UPLOAD_FOLDER, path, as_attachment=True)
-
-# --------------------------- requests ---------------------------
-@app.callback(Output("request-form", "children"), Input("url", "pathname"))
-def req_form(_):
-    user = current_user()
-    if not user:
-        raise PreventUpdate
-    with SessionLocal() as s:
-        if user.role == Role.EMP:
-            emp = _employee_for_user(user, s)
-            options = [{"label": emp.name, "value": emp.id}] if emp else []
-            return html.Div([
-                html.H4("Create Request"),
-                dcc.Dropdown(id="req-employee", options=options,
-                             value=(emp.id if emp else None), disabled=True),
-                dcc.Input(id="req-asset-name", placeholder="Asset name"),
-                dcc.Input(id="req-qty", type="number", value=1),
-                html.Button("Submit Request", id="req-submit", type="button", n_clicks=0),
-                html.Div(id="req-msg", style={"marginTop":"6px", "color":"#fda4af"})
-            ])
-        employees = s.query(Employee).filter(Employee.office_id == user.office_id).all() \
-            if user.role == Role.OM else s.query(Employee).all()
-        options = [{"label": e.name, "value": e.id} for e in employees]
-        return html.Div([
-            html.H4("Create Request"),
-            dcc.Dropdown(id="req-employee", options=options, placeholder="Employee"),
-            dcc.Input(id="req-asset-name", placeholder="Asset name"),
-            dcc.Input(id="req-qty", type="number", value=1),
-            html.Button("Submit Request", id="req-submit", type="button", n_clicks=0),
-            html.Div(id="req-msg", style={"marginTop":"6px", "color":"#fda4af"})
-        ])
-
-@app.callback(
-    Output("req-msg", "children"),
-    Output("requests-table", "children", allow_duplicate=True),
-    Output("req-dialog","message"),
-    Output("req-dialog","displayed"),
-    Output("req-asset-name","value"),
-    Output("req-qty","value"),
-    Input("req-submit", "n_clicks"),
-    State("req-employee", "value"),
-    State("req-asset-name", "value"),
-    State("req-qty", "value"),
-    prevent_initial_call=True
-)
-def create_request(n, emp_id, asset_name, qty):
-    user = current_user()
-    if not user:
-        raise PreventUpdate
-    if not n or n < 1:
-        raise PreventUpdate
-    asset_name = (asset_name or "").strip()
-    try: qty = int(qty or 0)
-    except Exception: qty = 0
-    if not asset_name:
-        return "Please enter an asset name.", render_requests_table(), "", False, asset_name, qty
-    if qty < 1:
-        return "Quantity must be at least 1.", render_requests_table(), "", False, asset_name, qty
-    with SessionLocal() as s:
-        if user.role == Role.EMP and not emp_id:
-            emp = _employee_for_user(user, s)
-            emp_id = emp.id if emp else None
-        if not emp_id:
-            return "Select an employee.", render_requests_table(), "", False, asset_name, qty
-        emp = s.get(Employee, emp_id)
-        if not emp:
-            return "Invalid employee.", render_requests_table(), "", False, asset_name, qty
-        if user.role == Role.OM and emp.office_id != user.office_id:
-            return "You can only submit requests for your office.", render_requests_table(), "", False, asset_name, qty
-        s.add(Request(employee_id=emp.id, office_id=emp.office_id, asset_name=asset_name, quantity=qty))
-        s.commit()
-    return "", render_requests_table(), "Request submitted.", True, "", 1
-
-@app.callback(Output("requests-table", "children"), Input("url", "pathname"))
-def render_requests_table(_=None):
-    user = current_user()
-    if not user:
-        raise PreventUpdate
-    with SessionLocal() as s:
-        q = s.query(Request)
         if user.role == Role.OM:
-            q = q.filter(Request.office_id == user.office_id)
+            emp_ids = [e.id for e in s.query(Employee).filter(Employee.office_id==user.office_id)]
+            assets = s.query(Asset).filter(((Asset.allocation_type==AllocationType.OFFICE)&(Asset.allocation_id==user.office_id))|
+                                           ((Asset.allocation_type==AllocationType.EMPLOYEE)&(Asset.allocation_id.in_(emp_ids)))).all()
         elif user.role == Role.EMP:
             emp = _employee_for_user(user, s)
-            q = q.filter(Request.employee_id == (emp.id if emp else -1))
-        rows = q.order_by(Request.created_at.desc()).all()
-        data = [{"id":r.id,"employee_id":r.employee_id,"office_id":r.office_id,"asset":r.asset_name,
-                 "qty":r.quantity,"status":r.status.value,"remark":r.remark or "",
-                 "created_at": r.created_at.strftime("%Y-%m-%d %H:%M")} for r in rows]
-    cols = [{"name": n, "id": n} for n in ["id","employee_id","office_id","asset","qty","status","remark","created_at"]]
-
-    user = current_user()
-    controls = html.Div([
-        dcc.Textarea(id="mgr-remark", placeholder="Remark…", style={"width":"100%","height":"60px"}),
-        html.Button("Approve", id="btn-approve"),
-        html.Button("Reject", id="btn-reject"),
-        html.Button("Mark Return Pending", id="btn-return-pending"),
-        html.Button("Mark Returned", id="btn-returned"),
-        html.Div(id="req-action-msg", style={"marginTop":"6px"})
-    ]) if user and user.role in (Role.GM, Role.OM) else html.Div()
-
-    return html.Div([dash_table.DataTable(data=data, columns=cols, id="req-table", row_selectable="single", page_size=10), controls])
-
-@app.callback(Output("req-action-msg", "children", allow_duplicate=True),
-              Input("btn-approve", "n_clicks"),
-              State("req-table", "selected_rows"), State("req-table", "data"),
-              State("mgr-remark", "value"), prevent_initial_call=True)
-def approve_req(n, selected, data, remark):
-    return handle_request_update(selected, data, remark, RequestStatus.APPROVED)
-
-@app.callback(Output("req-action-msg", "children", allow_duplicate=True),
-              Input("btn-reject", "n_clicks"),
-              State("req-table", "selected_rows"), State("req-table", "data"),
-              State("mgr-remark", "value"), prevent_initial_call=True)
-def reject_req(n, selected, data, remark):
-    return handle_request_update(selected, data, remark, RequestStatus.REJECTED)
-
-@app.callback(Output("req-action-msg", "children", allow_duplicate=True),
-              Input("btn-return-pending", "n_clicks"),
-              State("req-table", "selected_rows"), State("req-table", "data"),
-              State("mgr-remark", "value"), prevent_initial_call=True)
-def pending_req(n, selected, data, remark):
-    return handle_request_update(selected, data, remark, RequestStatus.RETURN_PENDING)
-
-@app.callback(Output("req-action-msg", "children", allow_duplicate=True),
-              Input("btn-returned", "n_clicks"),
-              State("req-table", "selected_rows"), State("req-table", "data"),
-              State("mgr-remark", "value"), prevent_initial_call=True)
-def returned_req(n, selected, data, remark):
-    return handle_request_update(selected, data, remark, RequestStatus.RETURNED)
-
-def handle_request_update(selected, data, remark, status):
-    user = current_user()
-    if not user:
-        return "Not allowed."
-    if user.role not in (Role.GM, Role.OM):
-        return "Not allowed."
-    if not selected:
-        return "Select a request first."
-    req_id = data[selected[0]]["id"]
-    with SessionLocal() as s:
-        r = s.get(Request, req_id)
-        if not r:
-            return "Request not found."
-        if user.role == Role.OM and r.office_id != user.office_id:
-            return "You can only update requests in your office."
-        r.status = status
-        if remark: r.remark = remark
-        s.commit()
-    return f"Status updated to {status.value}."
-
-# --------------------------- employees (OM) ---------------------------
-@app.callback(Output("emp-table", "children"), Input("url", "pathname"))
-def list_employees(_):
-    user = current_user()
-    if not user or user.role != Role.OM:
-        raise PreventUpdate
-    with SessionLocal() as s:
-        emps = s.query(Employee).filter(Employee.office_id == user.office_id).order_by(Employee.id).all()
-        data = [{"id": e.id, "name": e.name, "phone": getattr(e, "phone", ""), "office_id": e.office_id} for e in emps]
-    cols = [{"name": n, "id": n} for n in ["id", "name", "phone", "office_id"]]
-    return dash_table.DataTable(data=data, columns=cols, page_size=10, style_table={"overflowX":"auto"})
-
-@app.callback(
-    Output("emp-add-msg","children"),
-    Output("emp-dialog","message"),
-    Output("emp-dialog","displayed"),
-    Output("emp-new-name","value"),
-    Output("emp-new-phone","value"),
-    Output("emp-new-username","value"),
-    Output("emp-new-password","value"),
-    Input("emp-add-btn","n_clicks"),
-    State("emp-new-name","value"),
-    State("emp-new-phone","value"),
-    State("emp-new-username","value"),
-    State("emp-new-password","value"),
-    prevent_initial_call=True
-)
-def add_employee(n, name, phone, uname, pwd):
-    user = current_user()
-    if not user or user.role != Role.OM:
-        raise PreventUpdate
-    name = (name or "").strip()
-    uname = (uname or "").strip()
-    pwd = (pwd or "")
-    if not name or not uname or not pwd:
-        return ("Name, username and password are required.", "", False, name, phone, uname, pwd)
-    with SessionLocal() as s:
-        if s.query(User).filter(User.username == uname).first():
-            return ("Username already exists.", "", False, name, phone, uname, pwd)
-        emp = Employee(name=name, office_id=user.office_id, username=uname)
-        try: emp.phone = (phone or "").strip()
-        except Exception: pass
-        s.add(emp); s.flush()
-        s.add(User(username=uname, password_hash=generate_password_hash(pwd),
-                   role=Role.EMP, office_id=user.office_id))
-        s.commit()
-    return ("", "Employee created and login set.", True, "", "", "", "")
-
-# --------------------------- reports ---------------------------
-@app.callback(Output("reports-content","children"), Input("url","pathname"))
-def render_reports(_):
-    user = current_user()
-    if not user or user.role == Role.EMP:
-        raise PreventUpdate
-    with SessionLocal() as s:
-        if user.role == Role.OM:
-            emp_ids = [e.id for e in s.query(Employee).filter(Employee.office_id == user.office_id)]
-            office_assets = s.query(Asset).filter(
-                ((Asset.allocation_type == AllocationType.OFFICE) & (Asset.allocation_id == user.office_id)) |
-                ((Asset.allocation_type == AllocationType.EMPLOYEE) & (Asset.allocation_id.in_(emp_ids)))
-            ).all()
-            office_count = len(office_assets)
-            office_cost = sum(a.price * a.quantity for a in office_assets)
-            emp_options = [{"label": e.name, "value": e.id} for e in s.query(Employee).filter(Employee.office_id == user.office_id)]
+            assets = s.query(Asset).filter(Asset.allocation_id==emp.id).all() if emp else []
         else:
-            office_assets = s.query(Asset).all()
-            office_count = len(office_assets)
-            office_cost = sum(a.price * a.quantity for a in office_assets)
-            emp_options = [{"label": e.name, "value": e.id} for e in s.query(Employee)]
-    return html.Div([
-        html.Div([html.B("Assets allocated (scope): "), f"{office_count}"]),
-        html.Div([html.B("Total asset cost (scope): "), f"${office_cost:,.2f}"]),
+            assets = s.query(Asset).all()
+    rows = [{"id":a.id,"name":a.name,"price":a.price,"qty":a.quantity,"bill":os.path.basename(a.bill_path or "")} for a in assets]
+    cols = [{"name":n,"id":n} for n in rows[0].keys()] if rows else []
+    return dash_table.DataTable(data=rows, columns=cols, page_size=10)
+
+# ---------------- Admin (GM) ----------------
+def admin_layout():
+    return html.Div([navbar(),
+        html.H3("Admin — Offices & Managers"),
+        dcc.Input(id="adm-office-name", placeholder="Office name *"),
+        dcc.Input(id="adm-om-username", placeholder="OM username *"),
+        dcc.Input(id="adm-om-password", placeholder="OM password *", type="password"),
+        html.Button("Create", id="adm-create-office"),
+        html.Div(id="adm-msg", style={"color":"#fda4af"}),
         html.Hr(),
-        html.Div([html.B("Per-Employee Analytics")]),
-        dcc.Dropdown(id="rep-emp", options=emp_options, placeholder="Select employee"),
-        html.Div(id="rep-emp-kpis", style={"marginTop":"8px"}),
-        html.Hr(),
-        html.Div([html.B("Add Remark for Employee")]),
-        dcc.Dropdown(id="rep-emp-remark", options=emp_options, placeholder="Select employee"),
-        dcc.Textarea(id="rep-remark-text", placeholder="Write a remark...", style={"width":"100%","height":"80px"}),
-        html.Button("Add Remark", id="rep-add-remark"),
-        html.Div(id="rep-remark-msg", style={"marginTop":"6px","color":"#9fb3da"})
+        html.Div(id="adm-offices")
     ])
 
-@app.callback(Output("rep-emp-kpis","children"), Input("rep-emp","value"), prevent_initial_call=True)
-def per_employee_kpis(emp_id):
-    user = current_user()
-    if not user or not emp_id:
-        raise PreventUpdate
-    with SessionLocal() as s:
-        assets = s.query(Asset).filter(Asset.allocation_type == AllocationType.EMPLOYEE,
-                                       Asset.allocation_id == emp_id).all()
-        count = len(assets)
-        pending = sum(1 for a in assets if not a.returned)
-        cost = sum(a.price * a.quantity for a in assets)
-    return html.Ul([
-        html.Li(f"Resources this employee has: {count}"),
-        html.Li(f"Pending resources (not returned): {pending}"),
-        html.Li(f"Total asset cost for this employee: ${cost:,.2f}")
-    ])
-
-@app.callback(Output("rep-remark-msg","children"),
-              Input("rep-add-remark","n_clicks"),
-              State("rep-emp-remark","value"),
-              State("rep-remark-text","value"),
+@app.callback(Output("adm-msg","children"), Input("adm-create-office","n_clicks"),
+              State("adm-office-name","value"), State("adm-om-username","value"), State("adm-om-password","value"),
               prevent_initial_call=True)
-def add_remark(n, emp_id, textv):
+def create_office(_, name, uname, pwd):
     user = current_user()
-    if not user:
-        raise PreventUpdate
-    if not emp_id or not (textv or "").strip():
-        return "Select an employee and enter a remark."
+    if not user or user.role!=Role.GM: raise PreventUpdate
     with SessionLocal() as s:
-        s.add(Remark(author_user_id=user.id, target_type="EMPLOYEE", target_id=int(emp_id), content=(textv or "").strip()))
+        if s.query(Office).filter(Office.name.ilike(name)).first(): return "Office already exists."
+        if s.query(User).filter(User.username==uname).first(): return "Username already exists."
+        o = Office(name=name); s.add(o); s.flush()
+        s.add(User(username=uname, password_hash=generate_password_hash(pwd), role=Role.OM, office_id=o.id))
         s.commit()
-    return "Remark added."
+    return f"Office '{name}' created with OM '{uname}'."
 
-# --------------------------- profile ---------------------------
-@app.callback(Output("profile-form", "children"), Input("url", "pathname"))
-def load_profile(_):
-    user = current_user()
-    if not user:
-        raise PreventUpdate
-    with SessionLocal() as s:
-        emp = _employee_for_user(user, s) if user.role == Role.EMP else None
-        office = emp.office if emp else (None if not user.office_id else s.get(Office, user.office_id))
-        remarks_block = html.Div()
-        if emp:
-            rms = s.query(Remark).filter(Remark.target_type == "EMPLOYEE", Remark.target_id == emp.id).order_by(Remark.created_at.desc()).all()
-            remarks_block = html.Div([
-                html.Hr(), html.H4("Manager Remarks"),
-                html.Ul([html.Li(f"{r.created_at.strftime('%Y-%m-%d %H:%M')}: {r.content}") for r in rms]) if rms else html.Div("No remarks yet.")
-            ])
-        return html.Div([
-            html.Div([
-                html.Div(f"Employee ID: {emp.id if emp else '—'}"),
-                html.Div(f"Office ID: {office.id if office else '—'}"),
-                html.Div(f"Office Name: {office.name if office else '—'}"),
-            ], style={"marginBottom":"8px"}),
-            dcc.Input(id="profile-emp-name", placeholder="Employee name", value=(emp.name if emp else "")),
-            dcc.Input(id="profile-phone", placeholder="Phone number", value=getattr(emp, "phone", "") if emp else ""),
-            html.Button("Save Profile", id="btn-save-profile", n_clicks=0, type="button"),
-            remarks_block
-        ])
-
-@app.callback(Output("profile-dialog","message"),
-              Output("profile-dialog","displayed"),
-              Output("profile-msg","children"),
-              Input("btn-save-profile","n_clicks"),
-              State("profile-emp-name","value"),
-              State("profile-phone","value"),
-              prevent_initial_call=True)
-def save_profile(n, name, phone):
-    user = current_user()
-    if not user:
-        raise PreventUpdate
-    name = (name or "").strip()
-    phone = (phone or "").strip()
-    if not name:
-        return "", False, "Name is required."
-    with SessionLocal() as s:
-        emp = _employee_for_user(user, s)
-        if not emp:
-            return "", False, "No employee record."
-        emp.name = name
-        try: emp.phone = phone
-        except Exception: pass
-        s.commit()
-    return "Profile updated.", True, ""
-
-# --------------------------- admin (GM) ---------------------------
 @app.callback(Output("adm-offices","children"), Input("url","pathname"))
 def list_offices(_):
-    user = current_user()
-    if not user or user.role != Role.GM:
-        raise PreventUpdate
     with SessionLocal() as s:
-        offices = s.query(Office).order_by(Office.id).all()
-        data = []
-        for o in offices:
-            mgr = s.query(User).filter(User.role == Role.OM, User.office_id == o.id).first()
-            data.append({"office_id": o.id, "office_name": o.name, "manager": (mgr.username if mgr else "—")})
-    cols = [{"name": n, "id": n} for n in ["office_id","office_name","manager"]]
-    return dash_table.DataTable(data=data, columns=cols, page_size=10, style_table={"overflowX":"auto"})
+        offices = s.query(Office).all()
+        rows = [{"id":o.id,"name":o.name} for o in offices]
+    cols = [{"name":n,"id":n} for n in ["id","name"]]
+    return dash_table.DataTable(data=rows, columns=cols, page_size=10)
 
-@app.callback(
-    Output("adm-msg","children"),
-    Output("adm-dialog","message"),
-    Output("adm-dialog","displayed"),
-    Output("adm-office-name","value"),
-    Output("adm-om-username","value"),
-    Output("adm-om-password","value"),
-    Input("adm-create-office","n_clicks"),
-    State("adm-office-name","value"),
-    State("adm-om-username","value"),
-    State("adm-om-password","value"),
-    prevent_initial_call=True
-)
-def create_office_and_manager(n, office_name, om_user, om_pwd):
-    user = current_user()
-    if not user or user.role != Role.GM:
-        raise PreventUpdate
-    name = (office_name or "").strip()
-    ou = (om_user or "").strip()
-    op = (om_pwd or "")
-    if not name or not ou or not op:
-        return ("All fields are required.", "", False, office_name, om_user, om_pwd)
-    with SessionLocal() as s:
-        if s.query(Office).filter(Office.name.ilike(name)).first():
-            return ("Office name already exists.", "", False, office_name, om_user, om_pwd)
-        if s.query(User).filter(User.username == ou).first():
-            return ("OM username already exists.", "", False, office_name, om_user, om_pwd)
-        office = Office(name=name); s.add(office); s.flush()
-        s.add(User(username=ou, password_hash=generate_password_hash(op), role=Role.OM, office_id=office.id))
-        s.commit()
-    return ("", f"Office '{name}' created with OM '{ou}'.", True, "", "", "")
-
-# --------------------------- run ---------------------------
+# ---------------- Run ----------------
 if __name__ == "__main__":
     app.run(debug=True)
