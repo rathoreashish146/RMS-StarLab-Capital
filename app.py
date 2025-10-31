@@ -2140,7 +2140,7 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy import text
 import os, datetime, base64
 from functools import wraps
-from urllib.parse import quote  # <-- for safe bill links
+from urllib.parse import quote
 
 import dash
 from dash import Dash, html, dcc, Input, Output, State, dash_table
@@ -2182,7 +2182,7 @@ app = Dash(__name__, suppress_callback_exceptions=True, serve_locally=False)
 server = app.server
 server.secret_key = os.environ.get("RMS_SECRET", "dev-secret-key")
 
-# Pretty HTML shell + theme (no extra packages)
+# Pretty HTML shell + theme
 app.index_string = """
 <!DOCTYPE html>
 <html>
@@ -2238,7 +2238,6 @@ app.index_string = """
 
 # ---------- Helpers ----------
 def current_user():
-    """Load user and pre-touch office to avoid DetachedInstanceError."""
     uid = session.get("user_id")
     if not uid:
         return None
@@ -2531,7 +2530,7 @@ def load_kpis(_):
         if user.role == Role.GM:
             total_assets_cost = sum(a.price * a.quantity for a in s.query(Asset).all())
             count = s.query(Asset).count()
-            pending = s.query(Asset).filter(Asset.returned == False).count()  # noqa: E712
+            pending = s.query(Asset).filter(Asset.returned == False).count()
         else:
             emp_ids = [e.id for e in s.query(Employee).filter(Employee.office_id == user.office_id)]
             assets = s.query(Asset).filter(
@@ -2601,7 +2600,6 @@ def add_asset(n, name, price, qty, contents, filename):
     return ("", render_assets_table(), "Asset added.", True, "", "", 1, None)
 
 def _bill_link(a):
-    """Markdown link with URL-encoded filename so spaces work."""
     if not a.bill_path:
         return ""
     base = os.path.basename(a.bill_path)
@@ -2684,8 +2682,8 @@ def req_form(_):
 @app.callback(
     Output("req-msg", "children"),
     Output("requests-table", "children", allow_duplicate=True),
-    Output("req-dialog","message"),
-    Output("req-dialog","displayed"),
+    Output("req-dialog","message", allow_duplicate=True),
+    Output("req-dialog","displayed", allow_duplicate=True),
     Output("req-asset-name","value"),
     Output("req-qty","value"),
     Input("req-submit", "n_clicks"),
@@ -2749,11 +2747,8 @@ def render_requests_table(_=None):
         html.Button("Mark Returned", id="btn-returned", className="btn btn-outline"),
     ]) if user and user.role in (Role.GM, Role.OM) else html.Div()
 
-    # NEW: dialog that pops on action + table refresh handled by action callbacks
-    action_dialog = dcc.ConfirmDialog(id="req-action-dialog")
-
     table = dash_table.DataTable(data=data, columns=cols, id="req-table", row_selectable="single", page_size=10, style_table={"overflowX":"auto"})
-    return html.Div([table, action_dialog, html.Div(id="req-action-msg", style={"marginTop":"8px"}), controls])
+    return html.Div([table, html.Div(id="req-action-msg", style={"marginTop":"8px"}), controls])
 
 def handle_request_update(selected, data, remark, status):
     user = current_user()
@@ -2775,12 +2770,12 @@ def handle_request_update(selected, data, remark, status):
         s.commit()
     return f"Status updated to {status.value}."
 
-# Action callbacks — NOW also refresh table + show popup
+# Action callbacks -> refresh table + use existing req-dialog
 @app.callback(
     Output("req-action-msg", "children", allow_duplicate=True),
     Output("requests-table", "children", allow_duplicate=True),
-    Output("req-action-dialog", "message"),
-    Output("req-action-dialog", "displayed"),
+    Output("req-dialog", "message", allow_duplicate=True),
+    Output("req-dialog", "displayed", allow_duplicate=True),
     Input("btn-approve", "n_clicks"),
     State("req-table", "selected_rows"), State("req-table", "data"),
     State("mgr-remark", "value"),
@@ -2793,8 +2788,8 @@ def approve_req(n, selected, data, remark):
 @app.callback(
     Output("req-action-msg", "children", allow_duplicate=True),
     Output("requests-table", "children", allow_duplicate=True),
-    Output("req-action-dialog", "message"),
-    Output("req-action-dialog", "displayed"),
+    Output("req-dialog", "message", allow_duplicate=True),
+    Output("req-dialog", "displayed", allow_duplicate=True),
     Input("btn-reject", "n_clicks"),
     State("req-table", "selected_rows"), State("req-table", "data"),
     State("mgr-remark", "value"),
@@ -2807,8 +2802,8 @@ def reject_req(n, selected, data, remark):
 @app.callback(
     Output("req-action-msg", "children", allow_duplicate=True),
     Output("requests-table", "children", allow_duplicate=True),
-    Output("req-action-dialog", "message"),
-    Output("req-action-dialog", "displayed"),
+    Output("req-dialog", "message", allow_duplicate=True),
+    Output("req-dialog", "displayed", allow_duplicate=True),
     Input("btn-return-pending", "n_clicks"),
     State("req-table", "selected_rows"), State("req-table", "data"),
     State("mgr-remark", "value"),
@@ -2821,8 +2816,8 @@ def pending_req(n, selected, data, remark):
 @app.callback(
     Output("req-action-msg", "children", allow_duplicate=True),
     Output("requests-table", "children", allow_duplicate=True),
-    Output("req-action-dialog", "message"),
-    Output("req-action-dialog", "displayed"),
+    Output("req-dialog", "message", allow_duplicate=True),
+    Output("req-dialog", "displayed", allow_duplicate=True),
     Input("btn-returned", "n_clicks"),
     State("req-table", "selected_rows"), State("req-table", "data"),
     State("mgr-remark", "value"),
@@ -2881,8 +2876,6 @@ def add_employee(n, name, phone, uname, pwd):
     return ("", "Employee created and login set.", True, "", "", "", "")
 
 # ---------- GM Admin ----------
-# REFRESH admin dropdowns whenever: page opens, an office is created (after msg text updates),
-# an OM is created, or an OM password is reset
 @app.callback(
     Output("om-office","options"), Output("om-existing","options"),
     Input("url","pathname"),
@@ -2964,7 +2957,7 @@ def reset_om_password(om_id, new_pass, n):
         s.commit()
     return "Password reset."
 
-# ---------- Reports (GM + OM) ----------
+# ---------- Reports ----------
 @app.callback(Output("reports-content","children"), Input("url","pathname"))
 def render_reports(_):
     user = current_user()
@@ -3004,7 +2997,6 @@ def render_reports(_):
                 html.Div(id="rep-remark-msg", className="muted", style={"marginTop":"6px"})
             ])
 
-        # OM scope
         emp_ids = [e.id for e in s.query(Employee).filter(Employee.office_id == user.office_id)]
         office_assets = s.query(Asset).filter(
             ((Asset.allocation_type == AllocationType.OFFICE) & (Asset.allocation_id == user.office_id)) |
