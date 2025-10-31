@@ -3196,7 +3196,6 @@
 # # ---------- Run ----------
 # if __name__ == "__main__":
 #     app.run(debug=True)
-
 # app.py
 from sqlalchemy.orm import joinedload
 from sqlalchemy import text
@@ -4071,7 +4070,7 @@ def render_reports(_):
 
         return html.Div([
             html.Div(className="kpi", children=[html.Div("Assets in my office", className="label"), html.Div(office_count, className="value")]),
-            html.Div(className="kpi", children=[html.Div("Total cost for my office", className="label"), html.Div(f\"${office_cost:,.2f}\", className="value")]),
+            html.Div(className="kpi", children=[html.Div("Total cost for my office", className="label"), html.Div(f"${office_cost:,.2f}", className="value")]),
             html.Div(className="hr"),
             html.B("Per-Employee Analytics"),
             dcc.Dropdown(id="rep-emp", options=emp_options, placeholder="Select employee", className="dash-dropdown"),
