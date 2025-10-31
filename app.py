@@ -2136,14 +2136,13 @@
 # =============================================================== above code is good ====================================================================================================
 
 # app.py
-from sqlalchemy.orm import joinedload
 from sqlalchemy import text
 import os, datetime, base64
 from functools import wraps
 from urllib.parse import quote
 
 import dash
-from dash import Dash, html, dcc, Input, Output, State, dash_table
+from dash import Dash, html, dcc, Input, Output, State, dash_table, ctx
 from dash.exceptions import PreventUpdate
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask import session, send_from_directory
@@ -2238,6 +2237,7 @@ app.index_string = """
 
 # ---------- Helpers ----------
 def current_user():
+    """Load user and pre-touch office to avoid DetachedInstanceError."""
     uid = session.get("user_id")
     if not uid:
         return None
@@ -2245,6 +2245,7 @@ def current_user():
         u = s.get(User, uid)
         if not u:
             return None
+        # pre-load office while session is open
         if u.office_id:
             _ = s.get(Office, u.office_id)
         return u
@@ -2356,6 +2357,18 @@ def assets_layout():
                 dcc.Input(id="asset-price", placeholder="Price *", type="number", className="input"),
                 dcc.Input(id="asset-qty", placeholder="Quantity *", type="number", value=1, className="input"),
             ]),
+            # Allocation controls (dynamic)
+            dcc.RadioItems(
+                id="alloc-type",
+                options=[
+                    {"label":"Global / Unallocated", "value": AllocationType.UNALLOCATED.value},
+                    {"label":"Allocate to Office", "value": AllocationType.OFFICE.value},
+                    {"label":"Allocate to Employee", "value": AllocationType.EMPLOYEE.value},
+                ],
+                value=AllocationType.UNALLOCATED.value,
+                labelStyle={"display":"block", "margin":"6px 0"}
+            ),
+            dcc.Dropdown(id="alloc-target", placeholder="Choose office/employee (if applicable)", className="dash-dropdown"),
             html.Button(button_label, id="add-asset-btn", className="btn"),
             html.Div(id="asset-add-msg", style={"color":"crimson", "marginTop":"6px"}),
             dcc.ConfirmDialog(id="asset-dialog"),
@@ -2530,7 +2543,7 @@ def load_kpis(_):
         if user.role == Role.GM:
             total_assets_cost = sum(a.price * a.quantity for a in s.query(Asset).all())
             count = s.query(Asset).count()
-            pending = s.query(Asset).filter(Asset.returned == False).count()
+            pending = s.query(Asset).filter(Asset.returned == False).count()  # noqa: E712
         else:
             emp_ids = [e.id for e in s.query(Employee).filter(Employee.office_id == user.office_id)]
             assets = s.query(Asset).filter(
@@ -2559,9 +2572,10 @@ def load_kpis(_):
     Input("add-asset-btn", "n_clicks"),
     State("asset-name", "value"), State("asset-price", "value"), State("asset-qty", "value"),
     State("upload-bill", "contents"), State("upload-bill", "filename"),
+    State("alloc-type", "value"), State("alloc-target", "value"),
     prevent_initial_call=True
 )
-def add_asset(n, name, price, qty, contents, filename):
+def add_asset(n, name, price, qty, contents, filename, alloc_type, alloc_target):
     user = current_user()
     if not user:
         raise PreventUpdate
@@ -2587,15 +2601,27 @@ def add_asset(n, name, price, qty, contents, filename):
             f.write(decoded)
 
     with SessionLocal() as s:
-        if user.role == Role.EMP:
-            emp = _employee_for_user(user, s)
-            if not emp:
-                return ("No employee profile found for you.", render_assets_table(), "", False, name, price, qty, contents)
-            s.add(Asset(name=name, price=price_val, quantity=qty_val, bill_path=saved_path,
-                        allocation_type=AllocationType.EMPLOYEE, allocation_id=emp.id))
-            s.commit()
-            return ("", render_assets_table(), "Asset added to your profile.", True, "", "", 1, None)
-        s.add(Asset(name=name, price=price_val, quantity=qty_val, bill_path=saved_path))
+        # default: UNALLOCATED
+        a_type = AllocationType.UNALLOCATED
+        a_id = None
+        if alloc_type == AllocationType.OFFICE.value:
+            a_type = AllocationType.OFFICE
+            # GM may choose any office; OM/EMP default to own office if none chosen
+            if not alloc_target:
+                if user.office_id:
+                    a_id = user.office_id
+            else:
+                a_id = int(alloc_target)
+        elif alloc_type == AllocationType.EMPLOYEE.value:
+            a_type = AllocationType.EMPLOYEE
+            if alloc_target:
+                a_id = int(alloc_target)
+            elif user.role == Role.EMP:
+                emp = _employee_for_user(user, s)
+                a_id = emp.id if emp else None
+
+        s.add(Asset(name=name, price=price_val, quantity=qty_val, bill_path=saved_path,
+                    allocation_type=a_type, allocation_id=a_id))
         s.commit()
     return ("", render_assets_table(), "Asset added.", True, "", "", 1, None)
 
@@ -2603,7 +2629,8 @@ def _bill_link(a):
     if not a.bill_path:
         return ""
     base = os.path.basename(a.bill_path)
-    return f"[{base}](/uploads/{quote(base)})"
+    safe = quote(base)  # handle spaces and special chars
+    return f"[{base}](/uploads/{safe})"
 
 @app.callback(Output("assets-table", "children"), Input("url", "pathname"))
 def render_assets_table(_=None):
@@ -2645,6 +2672,39 @@ def render_assets_table(_=None):
 def serve_file(path):
     return send_from_directory(UPLOAD_FOLDER, path, as_attachment=True)
 
+# Dynamic options for allocation target
+@app.callback(
+    Output("alloc-target", "options"),
+    Output("alloc-target", "value"),
+    Output("alloc-target", "placeholder"),
+    Input("alloc-type", "value"),
+    Input("url", "pathname"),
+)
+def update_alloc_options(alloc_type, _):
+    user = current_user()
+    if not user:
+        raise PreventUpdate
+    with SessionLocal() as s:
+        if alloc_type == AllocationType.OFFICE.value:
+            if user.role == Role.GM:
+                offices = s.query(Office).order_by(Office.name).all()
+                opts = [{"label": o.name, "value": o.id} for o in offices]
+                return opts, None, "Select office"
+            else:
+                # lock to own office, but allow clearing value
+                return [{"label": "My Office", "value": user.office_id}], user.office_id, "My Office"
+        elif alloc_type == AllocationType.EMPLOYEE.value:
+            q = s.query(Employee)
+            if user.role == Role.OM:
+                q = q.filter(Employee.office_id == user.office_id)
+            elif user.role == Role.EMP:
+                emp = _employee_for_user(user, s)
+                if emp:
+                    return [{"label": emp.name, "value": emp.id}], emp.id, "Myself"
+            emps = q.order_by(Employee.name).all()
+            return [{"label": e.name, "value": e.id} for e in emps], None, "Select employee"
+        return [], None, "No target (Global/Unallocated)"
+
 # ---------- Requests ----------
 @app.callback(Output("request-form", "children"), Input("url", "pathname"))
 def req_form(_):
@@ -2682,8 +2742,8 @@ def req_form(_):
 @app.callback(
     Output("req-msg", "children"),
     Output("requests-table", "children", allow_duplicate=True),
-    Output("req-dialog","message", allow_duplicate=True),
-    Output("req-dialog","displayed", allow_duplicate=True),
+    Output("req-dialog","message"),
+    Output("req-dialog","displayed"),
     Output("req-asset-name","value"),
     Output("req-qty","value"),
     Input("req-submit", "n_clicks"),
@@ -2747,85 +2807,54 @@ def render_requests_table(_=None):
         html.Button("Mark Returned", id="btn-returned", className="btn btn-outline"),
     ]) if user and user.role in (Role.GM, Role.OM) else html.Div()
 
-    table = dash_table.DataTable(data=data, columns=cols, id="req-table", row_selectable="single", page_size=10, style_table={"overflowX":"auto"})
+    table = dash_table.DataTable(data=data, columns=cols, id="req-table",
+                                 row_selectable="single", page_size=10, style_table={"overflowX":"auto"})
     return html.Div([table, html.Div(id="req-action-msg", style={"marginTop":"8px"}), controls])
 
-def handle_request_update(selected, data, remark, status):
-    user = current_user()
-    if not user:
-        return "Not allowed."
-    if user.role not in (Role.GM, Role.OM):
-        return "Not allowed."
-    if not selected:
-        return "Select a request first."
-    req_id = data[selected[0]]["id"]
-    with SessionLocal() as s:
-        r = s.get(Request, req_id)
-        if not r:
-            return "Request not found."
-        if user.role == Role.OM and r.office_id != user.office_id:
-            return "You can only update requests in your office."
-        r.status = status
-        if remark: r.remark = remark
-        s.commit()
-    return f"Status updated to {status.value}."
-
-# Action callbacks -> refresh table + use existing req-dialog
+# Single handler for all 4 action buttons: refresh table after update
 @app.callback(
     Output("req-action-msg", "children", allow_duplicate=True),
     Output("requests-table", "children", allow_duplicate=True),
-    Output("req-dialog", "message", allow_duplicate=True),
-    Output("req-dialog", "displayed", allow_duplicate=True),
     Input("btn-approve", "n_clicks"),
-    State("req-table", "selected_rows"), State("req-table", "data"),
-    State("mgr-remark", "value"),
-    prevent_initial_call=True
-)
-def approve_req(n, selected, data, remark):
-    msg = handle_request_update(selected, data, remark, RequestStatus.APPROVED)
-    return msg, render_requests_table(), msg, True
-
-@app.callback(
-    Output("req-action-msg", "children", allow_duplicate=True),
-    Output("requests-table", "children", allow_duplicate=True),
-    Output("req-dialog", "message", allow_duplicate=True),
-    Output("req-dialog", "displayed", allow_duplicate=True),
     Input("btn-reject", "n_clicks"),
-    State("req-table", "selected_rows"), State("req-table", "data"),
-    State("mgr-remark", "value"),
-    prevent_initial_call=True
-)
-def reject_req(n, selected, data, remark):
-    msg = handle_request_update(selected, data, remark, RequestStatus.REJECTED)
-    return msg, render_requests_table(), msg, True
-
-@app.callback(
-    Output("req-action-msg", "children", allow_duplicate=True),
-    Output("requests-table", "children", allow_duplicate=True),
-    Output("req-dialog", "message", allow_duplicate=True),
-    Output("req-dialog", "displayed", allow_duplicate=True),
     Input("btn-return-pending", "n_clicks"),
-    State("req-table", "selected_rows"), State("req-table", "data"),
-    State("mgr-remark", "value"),
-    prevent_initial_call=True
-)
-def pending_req(n, selected, data, remark):
-    msg = handle_request_update(selected, data, remark, RequestStatus.RETURN_PENDING)
-    return msg, render_requests_table(), msg, True
-
-@app.callback(
-    Output("req-action-msg", "children", allow_duplicate=True),
-    Output("requests-table", "children", allow_duplicate=True),
-    Output("req-dialog", "message", allow_duplicate=True),
-    Output("req-dialog", "displayed", allow_duplicate=True),
     Input("btn-returned", "n_clicks"),
     State("req-table", "selected_rows"), State("req-table", "data"),
     State("mgr-remark", "value"),
     prevent_initial_call=True
 )
-def returned_req(n, selected, data, remark):
-    msg = handle_request_update(selected, data, remark, RequestStatus.RETURNED)
-    return msg, render_requests_table(), msg, True
+def handle_request_action(n1, n2, n3, n4, selected, data, remark):
+    user = current_user()
+    if not user or user.role not in (Role.GM, Role.OM):
+        return "Not allowed.", render_requests_table()
+    if not selected:
+        return "Select a request first.", render_requests_table()
+
+    # Which button?
+    mapping = {
+        "btn-approve": RequestStatus.APPROVED,
+        "btn-reject": RequestStatus.REJECTED,
+        "btn-return-pending": RequestStatus.RETURN_PENDING,
+        "btn-returned": RequestStatus.RETURNED,
+    }
+    trig = ctx.triggered_id
+    status = mapping.get(trig, None)
+    if status is None:
+        raise PreventUpdate
+
+    req_id = data[selected[0]]["id"]
+    with SessionLocal() as s:
+        r = s.get(Request, req_id)
+        if not r:
+            return "Request not found.", render_requests_table()
+        if user.role == Role.OM and r.office_id != user.office_id:
+            return "You can only update requests in your office.", render_requests_table()
+        r.status = status
+        if remark:
+            r.remark = remark
+        s.commit()
+
+    return f"Status updated to {status.value}.", render_requests_table()
 
 # ---------- Employees (OM) ----------
 @app.callback(Output("emp-table", "children"), Input("url", "pathname"))
@@ -2876,16 +2905,9 @@ def add_employee(n, name, phone, uname, pwd):
     return ("", "Employee created and login set.", True, "", "", "", "")
 
 # ---------- GM Admin ----------
-@app.callback(
-    Output("om-office","options"), Output("om-existing","options"),
-    Input("url","pathname"),
-    Input("btn-add-office","n_clicks"),
-    Input("msg-add-office","children"),
-    Input("btn-create-om","n_clicks"),
-    Input("btn-om-reset","n_clicks"),
-)
+@app.callback(Output("om-office","options"), Output("om-existing","options"), Input("url","pathname"))
 @login_required(Role.GM)
-def load_admin_dropdowns(_, n_add_office, msg_office, n_create_om, n_reset):
+def load_admin_dropdowns(_):
     with SessionLocal() as s:
         offices = s.query(Office).order_by(Office.name).all()
         oms = s.query(User).filter(User.role == Role.OM).order_by(User.username).all()
@@ -2894,21 +2916,30 @@ def load_admin_dropdowns(_, n_add_office, msg_office, n_create_om, n_reset):
             [{"label": u.username, "value": u.id} for u in oms]
         )
 
-@app.callback(Output("msg-add-office","children"),
-              Input("btn-add-office","n_clicks"),
-              State("new-office-name","value"),
-              prevent_initial_call=True)
+# Refresh office dropdown immediately after creating office
+@app.callback(
+    Output("msg-add-office","children"),
+    Output("om-office","options", allow_duplicate=True),
+    Input("btn-add-office","n_clicks"),
+    State("new-office-name","value"),
+    prevent_initial_call=True
+)
 @login_required(Role.GM)
 def add_office(n, office_name):
     name = (office_name or "").strip()
     if not name:
-        return "Office name is required."
+        # keep existing options
+        with SessionLocal() as s:
+            offices = s.query(Office).order_by(Office.name).all()
+        return "Office name is required.", [{"label": o.name, "value": o.id} for o in offices]
     with SessionLocal() as s:
         if s.query(Office).filter(Office.name.ilike(name)).first():
-            return "Office already exists."
+            offices = s.query(Office).order_by(Office.name).all()
+            return "Office already exists.", [{"label": o.name, "value": o.id} for o in offices]
         s.add(Office(name=name))
         s.commit()
-    return "Office created."
+        offices = s.query(Office).order_by(Office.name).all()
+    return "Office created.", [{"label": o.name, "value": o.id} for o in offices]
 
 @app.callback(
     Output("msg-create-om","children"),
@@ -2957,7 +2988,7 @@ def reset_om_password(om_id, new_pass, n):
         s.commit()
     return "Password reset."
 
-# ---------- Reports ----------
+# ---------- Reports (GM + OM) ----------
 @app.callback(Output("reports-content","children"), Input("url","pathname"))
 def render_reports(_):
     user = current_user()
@@ -2997,6 +3028,7 @@ def render_reports(_):
                 html.Div(id="rep-remark-msg", className="muted", style={"marginTop":"6px"})
             ])
 
+        # OM scope
         emp_ids = [e.id for e in s.query(Employee).filter(Employee.office_id == user.office_id)]
         office_assets = s.query(Asset).filter(
             ((Asset.allocation_type == AllocationType.OFFICE) & (Asset.allocation_id == user.office_id)) |
@@ -3124,3 +3156,4 @@ def save_profile(n, name, phone):
 # ---------- Run ----------
 if __name__ == "__main__":
     app.run(debug=True)
+
