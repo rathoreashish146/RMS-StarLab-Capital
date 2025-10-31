@@ -1,4 +1,4 @@
-# -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------------------------------------------------
 # app.py
 from sqlalchemy import text
 import os, datetime, base64
@@ -981,13 +981,13 @@ def render_reports(_):
                 html.Div(className="hr"),
                 html.B("Per-Employee Analytics"),
                 dcc.Dropdown(id="rep-emp", options=emp_options, placeholder="Select employee", className="dash-dropdown"),
-                html.Div(id="rep-emp-kpis", style({"marginTop":"8px"})),
+                html.Div(id="rep-emp-kpis", style={"marginTop":"8px"}),
                 html.Div(className="hr"),
                 html.B("Add Remark for Employee"),
                 dcc.Dropdown(id="rep-emp-remark", options=emp_options, placeholder="Select employee", className="dash-dropdown"),
                 dcc.Textarea(id="rep-remark-text", placeholder="Write a remark...", className="input", style={"height":"80px"}),
                 html.Button("Add Remark", id="rep-add-remark", className="btn"),
-                html.Div(id="rep-remark-msg", className="muted", style({"marginTop":"6px"}))
+                html.Div(id="rep-remark-msg", className="muted", style={"marginTop":"6px"})
             ])
 
         # OM scope
@@ -1006,13 +1006,13 @@ def render_reports(_):
             html.Div(className="hr"),
             html.B("Per-Employee Analytics"),
             dcc.Dropdown(id="rep-emp", options=emp_options, placeholder="Select employee", className="dash-dropdown"),
-            html.Div(id="rep-emp-kpis", style({"marginTop":"8px"})),
+            html.Div(id="rep-emp-kpis", style={"marginTop":"8px"}),
             html.Div(className="hr"),
             html.B("Add Remark for Employee"),
             dcc.Dropdown(id="rep-emp-remark", options=emp_options, placeholder="Select employee", className="dash-dropdown"),
             dcc.Textarea(id="rep-remark-text", placeholder="Write a remark...", className="input"),
             html.Button("Add Remark", id="rep-add-remark", className="btn"),
-            html.Div(id="rep-remark-msg", className="muted", style({"marginTop":"6px"}))
+            html.Div(id="rep-remark-msg", className="muted", style={"marginTop":"6px"})
         ])
 
 @app.callback(Output("rep-office-kpis","children"), Input("rep-office","value"), prevent_initial_call=True)
