@@ -5386,7 +5386,6 @@
 
 
 # -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 # app.py
 from sqlalchemy import text
 import os, datetime, base64
@@ -6182,7 +6181,6 @@ def handle_request_action(n1, n2, n3, n4, selected, data, remark):
             r.status = RequestStatus.APPROVED
 
         elif status == RequestStatus.RETURN_PENDING:
-            # do NOT delete asset; only change status
             r.status = RequestStatus.RETURN_PENDING
 
         elif status == RequestStatus.RETURNED:
@@ -6191,7 +6189,6 @@ def handle_request_action(n1, n2, n3, n4, selected, data, remark):
             r.status = RequestStatus.RETURNED
 
         elif status == RequestStatus.REJECTED:
-            # allowed only if not previously approved (guarded above)
             if matched_asset:
                 s.delete(matched_asset)
             r.status = RequestStatus.REJECTED
@@ -6350,7 +6347,7 @@ def render_reports(_):
             return html.Div([
                 html.Div(className="stack", children=[
                     html.Div(className="kpi", children=[html.Div("Company assets", className="label"), html.Div(company_count, className="value")]),
-                    html.Div(className="kpi", children=[html.Div("Company total cost", className="label"), html.Div(f\"${company_cost:,.2f}\", className="value")]),
+                    html.Div(className="kpi", children=[html.Div("Company total cost", className="label"), html.Div(f"${company_cost:,.2f}", className="value")]),
                     html.Div(className="kpi", children=[html.Div("Company pending returns", className="label"), html.Div(company_pending, className="value")]),
                 ]),
                 html.Div(className="hr"),
@@ -6381,7 +6378,7 @@ def render_reports(_):
 
         return html.Div([
             html.Div(className="kpi", children=[html.Div("Assets in my office", className="label"), html.Div(office_count, className="value")]),
-            html.Div(className="kpi", children=[html.Div("Total cost for my office", className="label"), html.Div(f\"${office_cost:,.2f}\", className="value")]),
+            html.Div(className="kpi", children=[html.Div("Total cost for my office", className="label"), html.Div(f"${office_cost:,.2f}", className="value")]),
             html.Div(className="hr"),
             html.B("Per-Employee Analytics"),
             dcc.Dropdown(id="rep-emp", options=emp_options, placeholder="Select employee", className="dash-dropdown"),
@@ -6497,4 +6494,3 @@ def save_profile(n, name, phone):
 # ---------- Run ----------
 if __name__ == "__main__":
     app.run(debug=True)
-
