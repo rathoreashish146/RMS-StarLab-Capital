@@ -2134,7 +2134,7 @@
 
 
 # =============================================================== above code is good ====================================================================================================
-
+# # app.py
 # from sqlalchemy import text
 # import os, datetime, base64
 # from functools import wraps
@@ -2165,7 +2165,7 @@
 
 # _safe_add_column("employees", "phone VARCHAR")
 # _safe_add_column("employees", "username VARCHAR")
-# # make sure requests has price/bill/fulfilled id even if db.py didn't run migration yet
+# # ensure request extras exist even if db.py migration didn't run yet
 # _safe_add_column("requests", "price FLOAT")
 # _safe_add_column("requests", "bill_path VARCHAR")
 # _safe_add_column("requests", "fulfilled_asset_id INTEGER")
@@ -2184,7 +2184,7 @@
 # server = app.server
 # server.secret_key = os.environ.get("RMS_SECRET", "dev-secret-key")
 
-# # Pretty HTML shell + theme (glass vibes already applied)
+# # Pretty HTML shell + theme
 # app.index_string = """
 # <!DOCTYPE html>
 # <html>
@@ -2840,7 +2840,7 @@
 #                                  row_selectable="single", page_size=10, style_table={"overflowX":"auto"})
 #     return html.Div([table, html.Div(id="req-action-msg", style={"marginTop":"8px"}), controls])
 
-# # Single handler for action buttons: also create Asset on APPROVED (once)
+# # ---------- Action buttons (2-phase approval-safe) ----------
 # @app.callback(
 #     Output("req-action-msg", "children", allow_duplicate=True),
 #     Output("requests-table", "children", allow_duplicate=True),
@@ -2871,32 +2871,57 @@
 #         raise PreventUpdate
 
 #     req_id = data[selected[0]]["id"]
-#     with SessionLocal() as s:
-#         r = s.get(Request, req_id)
-#         if not r:
-#             return "Request not found.", render_requests_table()
-#         if user.role == Role.OM and r.office_id != user.office_id:
-#             return "You can only update requests in your office.", render_requests_table()
 
-#         previous = r.status
-#         r.status = status
-#         if remark:
-#             r.remark = remark
+#     # Phase 1: update status/remark
+#     need_asset_payload = None
+#     try:
+#         with SessionLocal() as s:
+#             r = s.get(Request, req_id)
+#             if not r:
+#                 return "Request not found.", render_requests_table()
+#             if user.role == Role.OM and r.office_id != user.office_id:
+#                 return "You can only update requests in your office.", render_requests_table()
 
-#         # On first transition to APPROVED, create an Asset and link it
-#         if status == RequestStatus.APPROVED and not r.fulfilled_asset_id:
-#             a = Asset(
-#                 name=r.asset_name,
-#                 price=float(r.price or 0),
-#                 quantity=int(r.quantity or 1),
-#                 bill_path=r.bill_path,
-#                 allocation_type=AllocationType.EMPLOYEE,   # Allocate to the employee who raised the request
-#                 allocation_id=r.employee_id
-#             )
-#             s.add(a); s.flush()
-#             r.fulfilled_asset_id = a.id
+#             create_asset = (status == RequestStatus.APPROVED and not getattr(r, "fulfilled_asset_id", None))
+#             if remark:
+#                 r.remark = remark
+#             r.status = status
 
-#         s.commit()
+#             if create_asset:
+#                 need_asset_payload = dict(
+#                     name=r.asset_name,
+#                     price=float(r.price or 0),
+#                     quantity=int(r.quantity or 1),
+#                     bill_path=r.bill_path,
+#                     allocation_type=AllocationType.EMPLOYEE,
+#                     allocation_id=int(r.employee_id or 0),
+#                     req_row_id=r.id
+#                 )
+#             s.commit()
+#     except Exception as e:
+#         return f"Failed to update: {e}", render_requests_table()
+
+#     # Phase 2: create asset if needed (separate transaction)
+#     if need_asset_payload:
+#         if not need_asset_payload["allocation_id"]:
+#             return "Approved (no employee to allocate, asset not created).", render_requests_table()
+#         try:
+#             with SessionLocal() as s:
+#                 r2 = s.get(Request, req_id)
+#                 if r2 and not getattr(r2, "fulfilled_asset_id", None):
+#                     a = Asset(
+#                         name=need_asset_payload["name"],
+#                         price=need_asset_payload["price"],
+#                         quantity=need_asset_payload["quantity"],
+#                         bill_path=need_asset_payload["bill_path"],
+#                         allocation_type=need_asset_payload["allocation_type"],
+#                         allocation_id=need_asset_payload["allocation_id"],
+#                     )
+#                     s.add(a); s.flush()
+#                     r2.fulfilled_asset_id = a.id
+#                     s.commit()
+#         except Exception as e:
+#             return f"Approved (asset creation failed: {e})", render_requests_table()
 
 #     return f"Status updated to {status.value}.", render_requests_table()
 
@@ -3035,6 +3060,7 @@
 #     user = current_user()
 #     if not user or user.role == Role.EMP:
 #         raise PreventUpdate
+
 #     with SessionLocal() as s:
 #         if user.role == Role.GM:
 #             all_assets = s.query(Asset).all()
@@ -3197,8 +3223,8 @@
 # if __name__ == "__main__":
 #     app.run(debug=True)
 
+# -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-# -------------------------------------------------------------------------- above is ok but approve is not working -------------------------------------------------------------------------------------
 
 # app.py
 from sqlalchemy import text
@@ -3906,7 +3932,7 @@ def render_requests_table(_=None):
                                  row_selectable="single", page_size=10, style_table={"overflowX":"auto"})
     return html.Div([table, html.Div(id="req-action-msg", style={"marginTop":"8px"}), controls])
 
-# ---------- Action buttons (2-phase approval-safe) ----------
+# ---------- Action buttons (approve-safe + proper undo) ----------
 @app.callback(
     Output("req-action-msg", "children", allow_duplicate=True),
     Output("requests-table", "children", allow_duplicate=True),
@@ -3938,56 +3964,44 @@ def handle_request_action(n1, n2, n3, n4, selected, data, remark):
 
     req_id = data[selected[0]]["id"]
 
-    # Phase 1: update status/remark
-    need_asset_payload = None
-    try:
-        with SessionLocal() as s:
-            r = s.get(Request, req_id)
-            if not r:
-                return "Request not found.", render_requests_table()
-            if user.role == Role.OM and r.office_id != user.office_id:
-                return "You can only update requests in your office.", render_requests_table()
+    with SessionLocal() as s:
+        r = s.get(Request, req_id)
+        if not r:
+            return "Request not found.", render_requests_table()
+        if user.role == Role.OM and r.office_id != user.office_id:
+            return "You can only update requests in your office.", render_requests_table()
 
-            create_asset = (status == RequestStatus.APPROVED and not getattr(r, "fulfilled_asset_id", None))
-            if remark:
-                r.remark = remark
-            r.status = status
+        if remark:
+            r.remark = remark
 
-            if create_asset:
-                need_asset_payload = dict(
+        if status == RequestStatus.APPROVED:
+            # Create asset only once
+            if not getattr(r, "fulfilled_asset_id", None):
+                a = Asset(
                     name=r.asset_name,
                     price=float(r.price or 0),
                     quantity=int(r.quantity or 1),
                     bill_path=r.bill_path,
                     allocation_type=AllocationType.EMPLOYEE,
-                    allocation_id=int(r.employee_id or 0),
-                    req_row_id=r.id
+                    allocation_id=r.employee_id
                 )
-            s.commit()
-    except Exception as e:
-        return f"Failed to update: {e}", render_requests_table()
+                s.add(a); s.flush()
+                r.fulfilled_asset_id = a.id
+            r.status = RequestStatus.APPROVED
 
-    # Phase 2: create asset if needed (separate transaction)
-    if need_asset_payload:
-        if not need_asset_payload["allocation_id"]:
-            return "Approved (no employee to allocate, asset not created).", render_requests_table()
-        try:
-            with SessionLocal() as s:
-                r2 = s.get(Request, req_id)
-                if r2 and not getattr(r2, "fulfilled_asset_id", None):
-                    a = Asset(
-                        name=need_asset_payload["name"],
-                        price=need_asset_payload["price"],
-                        quantity=need_asset_payload["quantity"],
-                        bill_path=need_asset_payload["bill_path"],
-                        allocation_type=need_asset_payload["allocation_type"],
-                        allocation_id=need_asset_payload["allocation_id"],
-                    )
-                    s.add(a); s.flush()
-                    r2.fulfilled_asset_id = a.id
-                    s.commit()
-        except Exception as e:
-            return f"Approved (asset creation failed: {e})", render_requests_table()
+        else:
+            # Moving away from approved:
+            if getattr(r, "fulfilled_asset_id", None):
+                asset = s.get(Asset, r.fulfilled_asset_id)
+                if asset:
+                    if status == RequestStatus.RETURNED:
+                        asset.returned = True
+                    elif status in (RequestStatus.REJECTED, RequestStatus.RETURN_PENDING):
+                        s.delete(asset)
+                        r.fulfilled_asset_id = None
+            r.status = status
+
+        s.commit()
 
     return f"Status updated to {status.value}.", render_requests_table()
 
@@ -4147,17 +4161,17 @@ def render_reports(_):
                 html.Div(className="hr"),
                 html.B("Per-Office Analytics"),
                 dcc.Dropdown(id="rep-office", options=office_options, placeholder="Select office", className="dash-dropdown"),
-                html.Div(id="rep-office-kpis", style={"marginTop":"8px"}),
+                html.Div(id="rep-office-kpis", style({"marginTop":"8px"})),
                 html.Div(className="hr"),
                 html.B("Per-Employee Analytics"),
                 dcc.Dropdown(id="rep-emp", options=emp_options, placeholder="Select employee", className="dash-dropdown"),
-                html.Div(id="rep-emp-kpis", style={"marginTop":"8px"}),
+                html.Div(id="rep-emp-kpis", style({"marginTop":"8px"})),
                 html.Div(className="hr"),
                 html.B("Add Remark for Employee"),
                 dcc.Dropdown(id="rep-emp-remark", options=emp_options, placeholder="Select employee", className="dash-dropdown"),
                 dcc.Textarea(id="rep-remark-text", placeholder="Write a remark...", className="input", style={"height":"80px"}),
                 html.Button("Add Remark", id="rep-add-remark", className="btn"),
-                html.Div(id="rep-remark-msg", className="muted", style={"marginTop":"6px"})
+                html.Div(id="rep-remark-msg", className="muted", style({"marginTop":"6px"}))
             ])
 
         # OM scope
@@ -4176,13 +4190,13 @@ def render_reports(_):
             html.Div(className="hr"),
             html.B("Per-Employee Analytics"),
             dcc.Dropdown(id="rep-emp", options=emp_options, placeholder="Select employee", className="dash-dropdown"),
-            html.Div(id="rep-emp-kpis", style={"marginTop":"8px"}),
+            html.Div(id="rep-emp-kpis", style({"marginTop":"8px"})),
             html.Div(className="hr"),
             html.B("Add Remark for Employee"),
             dcc.Dropdown(id="rep-emp-remark", options=emp_options, placeholder="Select employee", className="dash-dropdown"),
             dcc.Textarea(id="rep-remark-text", placeholder="Write a remark...", className="input"),
             html.Button("Add Remark", id="rep-add-remark", className="btn"),
-            html.Div(id="rep-remark-msg", className="muted", style={"marginTop":"6px"})
+            html.Div(id="rep-remark-msg", className="muted", style({"marginTop":"6px"}))
         ])
 
 @app.callback(Output("rep-office-kpis","children"), Input("rep-office","value"), prevent_initial_call=True)
@@ -4288,4 +4302,7 @@ def save_profile(n, name, phone):
 # ---------- Run ----------
 if __name__ == "__main__":
     app.run(debug=True)
+
+
+# ---------------------------------------------------------------- above is okok good ------------------------------------------------------------------------------------------------------------------
 
