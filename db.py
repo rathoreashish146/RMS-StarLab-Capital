@@ -148,7 +148,7 @@ def init_db(seed=False):
             cnel = Office(name="Cloud Nebula Enterprises Lucknow")
             psace = Office(name="Prof. Shamim Ahmad AI Centre of Excellence")
             s.add_all([cnel, psace])
-            s.flush()  # so we have IDs
+            s.flush()  # populate IDs
 
             # --- Users (GM + OMs) ---
             # GM
@@ -176,26 +176,42 @@ def init_db(seed=False):
             )
 
             s.add_all([gm_faisal, om_mahtab_cnel, om_mahtab_psace])
+            s.flush()
 
-            # --- Employees: Cloud Nebula Enterprises Lucknow ---
-            emps_cnel = [
-                Employee(name="Mohd Rehbar", office_id=cnel.id, username=None),
-                Employee(name="Mohd Yousuf Khan", office_id=cnel.id, username=None),
-                Employee(name="Nawab Shahzeb Uddin", office_id=cnel.id, username=None),
-                Employee(name="Haider Ali", office_id=cnel.id, username=None),
+            # --- Employees + corresponding User accounts ---
+            # Cloud Nebula Enterprises Lucknow employees
+            employees_cnel = [
+                {"name": "Mohd Rehbar", "username": "mohd_rehbar"},
+                {"name": "Mohd Yousuf Khan", "username": "mohd_yousuf"},
+                {"name": "Nawab Shahzeb Uddin", "username": "nawab_shahzeb"},
+                {"name": "Haider Ali", "username": "haider_ali"},
             ]
 
-            # --- Employees: Prof. Shamim Ahmad AI Centre of Excellence ---
-            # (You listed 3 first, then “Ashish, Waqarul Hasan”; I’m adding all 5.)
-            emps_psace = [
-                Employee(name="Mahtab Alam", office_id=psace.id, username=None),
-                Employee(name="Vikalp Varshney", office_id=psace.id, username=None),
-                Employee(name="Imaad Hasan", office_id=psace.id, username=None),
-                Employee(name="Ashish", office_id=psace.id, username=None),
-                Employee(name="Waqarul Hasan", office_id=psace.id, username=None),
+            # Prof. Shamim Ahmad AI Centre of Excellence employees
+            employees_psace = [
+                {"name": "Mahtab Alam", "username": "mahtab_alam"},  # avoids collision with OM 'mahtab'
+                {"name": "Vikalp Varshney", "username": "vikalp_varshney"},
+                {"name": "Imaad Hasan", "username": "imaad_hasan"},
+                {"name": "Ashish", "username": "ashish"},
+                {"name": "Waqarul Hasan", "username": "waqarul_hasan"},
             ]
 
-            s.add_all(emps_cnel + emps_psace)
+            # Helper: add employee + matching user account
+            def _add_emp_with_user(emp_def, office_id):
+                uname = emp_def["username"]
+                # create Employee
+                emp = Employee(name=emp_def["name"], office_id=office_id, username=uname)
+                s.add(emp)
+                # create User for that employee (role=EMP) with password "<username>@51020"
+                pwd = f"{uname}@51020"
+                user = User(username=uname, password_hash=generate_password_hash(pwd), role=Role.EMP, office_id=office_id)
+                s.add(user)
 
-            # No demo assets/requests; start clean per your ask.
+            for e in employees_cnel:
+                _add_emp_with_user(e, cnel.id)
+
+            for e in employees_psace:
+                _add_emp_with_user(e, psace.id)
+
+            # Commit seeded data
             s.commit()
