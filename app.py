@@ -1,4 +1,4 @@
-# # -------------------------------------------------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------------------------------------------------
 # # app.py
 # from sqlalchemy import text
 # import os, datetime, base64
@@ -1122,9 +1122,9 @@
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
-
-# -------------------------------------------------------------------------------------------------------------------------------------------
-# app.py
+# ---------------------------------------------------------------------------
+# app.py (RMS — pastel blue / glassmorphism, with requested fixes)
+# ---------------------------------------------------------------------------
 from sqlalchemy import text
 import os, datetime, base64
 from functools import wraps
@@ -1173,7 +1173,7 @@ app = Dash(__name__, suppress_callback_exceptions=True, serve_locally=False)
 server = app.server
 server.secret_key = os.environ.get("RMS_SECRET", "dev-secret-key")
 
-# Pretty HTML shell + theme
+# Pretty HTML shell + theme (unchanged pastel blue / glassmorphism)
 app.index_string = """
 <!DOCTYPE html>
 <html>
@@ -1329,12 +1329,41 @@ def _uploader_component(id_):
         multiple=False
     )
 
+def _alloc_radio_for_user(user):
+    """
+    Build allocation radio options per role:
+      - GM: UNALLOCATED + OFFICE + EMPLOYEE (as before)
+      - OM: OFFICE + EMPLOYEE (NO Unallocated)  <-- req #1
+      - EMP: EMPLOYEE only                       <-- req #4
+    Also returns a sensible default value per role.
+    """
+    if user.role == Role.GM:
+        options = [
+            {"label":"Global / Unallocated", "value": AllocationType.UNALLOCATED.value},
+            {"label":"Allocate to Office", "value": AllocationType.OFFICE.value},
+            {"label":"Allocate to Employee", "value": AllocationType.EMPLOYEE.value},
+        ]
+        default_val = AllocationType.UNALLOCATED.value
+    elif user.role == Role.OM:
+        options = [
+            {"label":"Allocate to Office", "value": AllocationType.OFFICE.value},
+            {"label":"Allocate to Employee", "value": AllocationType.EMPLOYEE.value},
+        ]
+        default_val = AllocationType.OFFICE.value
+    else:  # EMP
+        options = [
+            {"label":"Allocate to Me", "value": AllocationType.EMPLOYEE.value},
+        ]
+        default_val = AllocationType.EMPLOYEE.value
+    return options, default_val
+
 def assets_layout():
     user = current_user()
     if not user:
         return login_layout()
     header = "My Assets" if user.role == Role.EMP else "Assets"
     button_label = "Add to My Profile" if user.role == Role.EMP else "Add Asset"
+    radio_options, radio_default = _alloc_radio_for_user(user)
     return html.Div([
         navbar(),
         html.Div(className="card", children=[
@@ -1347,12 +1376,8 @@ def assets_layout():
             ]),
             dcc.RadioItems(
                 id="alloc-type",
-                options=[
-                    {"label":"Global / Unallocated", "value": AllocationType.UNALLOCATED.value},
-                    {"label":"Allocate to Office", "value": AllocationType.OFFICE.value},
-                    {"label":"Allocate to Employee", "value": AllocationType.EMPLOYEE.value},
-                ],
-                value=AllocationType.UNALLOCATED.value,
+                options=radio_options,
+                value=radio_default,
                 labelStyle={"display":"block", "margin":"6px 0"}
             ),
             dcc.Dropdown(id="alloc-target", placeholder="Choose office/employee (if applicable)", className="dash-dropdown"),
@@ -1467,6 +1492,7 @@ def profile_layout():
         html.Div(className="card", children=[
             html.H3("My Profile"),
             html.Div(id="profile-form"),
+            # Kept component but we'll NEVER display it (req #5)
             dcc.ConfirmDialog(id="profile-dialog"),
             html.Div(id="profile-msg", style={"color":"crimson", "marginTop":"6px"}),
         ])
@@ -1588,18 +1614,26 @@ def add_asset(n, name, price, qty, contents, filename, alloc_type, alloc_target)
             f.write(decoded)
 
     with SessionLocal() as s:
-        a_type = AllocationType.UNALLOCATED
-        a_id = None
-        if alloc_type == AllocationType.OFFICE.value:
-            a_type = AllocationType.OFFICE
-            a_id = int(alloc_target) if alloc_target else (current_user().office_id or None)
-        elif alloc_type == AllocationType.EMPLOYEE.value:
+        # Enforce allocation rules by role (req #1 + #4)
+        if user.role == Role.GM:
+            a_type = AllocationType(alloc_type)
+            a_id = None
+            if a_type == AllocationType.OFFICE:
+                a_id = int(alloc_target) if alloc_target else None
+            elif a_type == AllocationType.EMPLOYEE:
+                a_id = int(alloc_target) if alloc_target else None
+        elif user.role == Role.OM:
+            # OM cannot create UNALLOCATED
+            if alloc_type == AllocationType.EMPLOYEE.value:
+                a_type = AllocationType.EMPLOYEE
+                a_id = int(alloc_target) if alloc_target else None
+            else:
+                a_type = AllocationType.OFFICE
+                a_id = user.office_id
+        else:  # EMP can only allocate to self
             a_type = AllocationType.EMPLOYEE
-            if alloc_target:
-                a_id = int(alloc_target)
-            elif current_user().role == Role.EMP:
-                emp = _employee_for_user(current_user(), s)
-                a_id = emp.id if emp else None
+            emp = _employee_for_user(user, s)
+            a_id = emp.id if emp else None
 
         s.add(Asset(name=name, price=price_val, quantity=qty_val, bill_path=saved_path,
                     allocation_type=a_type, allocation_id=a_id))
@@ -1696,7 +1730,8 @@ def update_alloc_options(alloc_type, _):
                     return [{"label": emp.name, "value": emp.id}], emp.id, "Myself"
             emps = q.order_by(Employee.name).all()
             return [{"label": e.name, "value": e.id} for e in emps], None, "Select employee"
-        return [], None, "No target (Global/Unallocated)"
+        # For OM/EMP we never show unallocated (req #1 & #4)
+        return [], None, "No target"
 
 # ---------- Requests ----------
 @app.callback(Output("request-form", "children"), Input("url", "pathname"))
@@ -1947,17 +1982,21 @@ def handle_request_action(n1, n2, n3, n4, selected, data, remark):
     return f"Status updated to {status.value}.", render_requests_table(), "", False
 
 # ---------- Employees (OM) ----------
-@app.callback(Output("emp-table", "children"), Input("url", "pathname"))
-def list_employees(_):
-    user = current_user()
-    if not user or user.role != Role.OM:
-        raise PreventUpdate
+def _render_emp_table_for_om(user):
     with SessionLocal() as s:
         emps = s.query(Employee).filter(Employee.office_id == user.office_id).order_by(Employee.id).all()
         data = [{"id": e.id, "name": e.name, "phone": getattr(e, "phone", ""), "office_id": e.office_id} for e in emps]
     cols = [{"name": n, "id": n} for n in ["id", "name", "phone", "office_id"]]
     return dash_table.DataTable(data=data, columns=cols, page_size=10, style_table={"overflowX":"auto"})
 
+@app.callback(Output("emp-table", "children"), Input("url", "pathname"))
+def list_employees(_):
+    user = current_user()
+    if not user or user.role != Role.OM:
+        raise PreventUpdate
+    return _render_emp_table_for_om(user)
+
+# NOTE: Update table immediately after adding employee (req #2)
 @app.callback(
     Output("emp-add-msg","children"),
     Output("emp-dialog","message"),
@@ -1966,6 +2005,7 @@ def list_employees(_):
     Output("emp-new-phone","value"),
     Output("emp-new-username","value"),
     Output("emp-new-password","value"),
+    Output("emp-table","children", allow_duplicate=True),
     Input("emp-add-btn","n_clicks"),
     State("emp-new-name","value"),
     State("emp-new-phone","value"),
@@ -1981,10 +2021,10 @@ def add_employee(n, name, phone, uname, pwd):
     uname = (uname or "").strip()
     pwd = (pwd or "")
     if not name or not uname or not pwd:
-        return ("Name, username and password are required.", "", False, name, phone, uname, pwd)
+        return ("Name, username and password are required.", "", False, name, phone, uname, pwd, _render_emp_table_for_om(user))
     with SessionLocal() as s:
         if s.query(User).filter(User.username == uname).first():
-            return ("Username already exists.", "", False, name, phone, uname, pwd)
+            return ("Username already exists.", "", False, name, phone, uname, pwd, _render_emp_table_for_om(user))
         emp = Employee(name=name, office_id=user.office_id, username=uname)
         try: emp.phone = (phone or "").strip()
         except Exception: pass
@@ -1992,7 +2032,8 @@ def add_employee(n, name, phone, uname, pwd):
         s.add(User(username=uname, password_hash=generate_password_hash(pwd),
                    role=Role.EMP, office_id=user.office_id))
         s.commit()
-    return ("", "Employee created and login set.", True, "", "", "", "")
+    # Clear fields, show dialog, and refresh table immediately
+    return ("", "Employee created and login set.", True, "", "", "", "", _render_emp_table_for_om(user))
 
 # ---------- GM Admin ----------
 @app.callback(Output("om-office","options"), Output("om-existing","options"), Input("url","pathname"))
@@ -2196,12 +2237,37 @@ def add_remark(n, emp_id, textv):
 # ---------- Profile ----------
 @app.callback(Output("profile-form", "children"), Input("url", "pathname"))
 def load_profile(_):
+    """
+    Show employee's own info + ALL remarks addressed to that employee (req #3).
+    """
     user = current_user()
     if not user:
         raise PreventUpdate
     with SessionLocal() as s:
         emp = _employee_for_user(user, s) if user.role == Role.EMP else None
         office = s.get(Office, user.office_id) if user.office_id else None
+
+        # Gather remarks targeted to this employee (if exists)
+        remarks_list = []
+        if emp:
+            rs = s.query(Remark).filter(
+                Remark.target_type == "EMPLOYEE",
+                Remark.target_id == emp.id
+            ).order_by(Remark.created_at.desc()).all()
+            for r in rs:
+                ts = getattr(r, "created_at", None)
+                ts_str = ts.strftime("%Y-%m-%d %H:%M") if ts else ""
+                remarks_list.append(html.Li([
+                    html.Span(f"{ts_str} — "),
+                    html.Span(r.content or "")
+                ]))
+
+        remarks_block = html.Div([
+            html.Div(className="hr"),
+            html.B("Manager Remarks for You"),
+            html.Ul(remarks_list) if remarks_list else html.Div(className="muted", children="No remarks yet.")
+        ]) if emp else html.Div()
+
         return html.Div([
             html.Div([
                 html.Div(f"User: {user.username}"),
@@ -2213,8 +2279,10 @@ def load_profile(_):
             dcc.Input(id="profile-emp-name", placeholder="Employee name", value=(emp.name if emp else ""), className="input"),
             dcc.Input(id="profile-phone", placeholder="Phone number", value=getattr(emp, "phone", "") if emp else "", className="input"),
             html.Button("Save Profile", id="btn-save-profile", n_clicks=0, type="button", className="btn"),
+            remarks_block
         ])
 
+# No popup on visiting profile; after saving also DO NOT show popup (req #5)
 @app.callback(Output("profile-dialog","message"),
               Output("profile-dialog","displayed"),
               Output("profile-msg","children"),
@@ -2238,7 +2306,8 @@ def save_profile(n, name, phone):
         try: emp.phone = phone
         except Exception: pass
         s.commit()
-    return "Profile updated.", True, ""
+    # No modal; just a small status message
+    return "", False, "Profile updated."
 
 # ---------- Run ----------
 if __name__ == "__main__":
