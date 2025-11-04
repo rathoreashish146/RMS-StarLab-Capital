@@ -1,16 +1,4 @@
-# db.py
-# from sqlalchemy import create_engine, Column, Integer, String, Float, Enum, ForeignKey, Boolean, DateTime, Text
-# from sqlalchemy.orm import declarative_base, relationship, sessionmaker
-# from sqlalchemy import text
-# import enum, os, datetime
 
-# # DB_PATH = os.environ.get("RMS_DB_PATH", "rms.db")
-# DB_PATH = "postgresql://rms_38f2_user:h2XOIhTv7TQXvz72E5GuJgFx50S6QgHf@dpg-d44oeffgi27c73aeg36g-a/rms_38f2"
-# # Safer for threaded servers if needed:
-# # engine = create_engine(f"sqlite:///{DB_PATH}", echo=False, future=True, connect_args={"check_same_thread": False})
-# engine = create_engine(DB_PATH, echo=False, future=True)
-# SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-# Base = declarative_base()
 # db.py
 from sqlalchemy import create_engine, Column, Integer, String, Float, Enum, ForeignKey, Boolean, DateTime, Text
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
@@ -110,93 +98,6 @@ def _safe_add_column(conn, table, coldef):
     if colname not in names:
         conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {coldef}"))
 
-
-# def init_db(seed=False):
-#     Base.metadata.create_all(engine)
-#     # lightweight migrations for old DBs
-#     try:
-#         with engine.begin() as conn:
-#             _safe_add_column(conn, "employees", "phone VARCHAR")
-#             _safe_add_column(conn, "employees", "username VARCHAR")
-#             _safe_add_column(conn, "requests", "price FLOAT")
-#             _safe_add_column(conn, "requests", "bill_path VARCHAR")
-#     except Exception:
-#         pass
-
-#     if seed:
-#         from werkzeug.security import generate_password_hash
-#         with SessionLocal() as s:
-#             # --- Offices ---
-#             cnel = Office(name="Cloud Nebula Enterprises Lucknow")
-#             psace = Office(name="Prof. Shamim Ahmad AI Centre of Excellence")
-#             s.add_all([cnel, psace])
-#             s.flush()  # populate IDs
-
-#             # --- Users (GM + OMs) ---
-#             # GM
-#             gm_faisal = User(
-#                 username="faisal",
-#                 password_hash=generate_password_hash("faisal@51020"),
-#                 role=Role.GM,
-#                 office_id=None
-#             )
-
-#             # OM for CNEL
-#             om_mahtab_cnel = User(
-#                 username="mahtab",
-#                 password_hash=generate_password_hash("mahtab@51020"),
-#                 role=Role.OM,
-#                 office_id=cnel.id
-#             )
-
-#             # OM for PSACE (same person, separate account due to schema limits)
-#             om_mahtab_psace = User(
-#                 username="mahtab_ai",
-#                 password_hash=generate_password_hash("mahtab@51020"),
-#                 role=Role.OM,
-#                 office_id=psace.id
-#             )
-
-#             s.add_all([gm_faisal, om_mahtab_cnel, om_mahtab_psace])
-#             s.flush()
-
-#             # --- Employees + corresponding User accounts ---
-#             # Cloud Nebula Enterprises Lucknow employees
-#             employees_cnel = [
-#                 {"name": "Mohd Rehbar", "username": "mohd_rehbar"},
-#                 {"name": "Mohd Yousuf Khan", "username": "mohd_yousuf"},
-#                 {"name": "Nawab Shahzeb Uddin", "username": "nawab_shahzeb"},
-#                 {"name": "Haider Ali", "username": "haider_ali"},
-#             ]
-
-#             # Prof. Shamim Ahmad AI Centre of Excellence employees
-#             employees_psace = [
-#                 {"name": "Mahtab Alam", "username": "mahtab_alam"},  # avoids collision with OM 'mahtab'
-#                 {"name": "Vikalp Varshney", "username": "vikalp_varshney"},
-#                 {"name": "Imaad Hasan", "username": "imaad_hasan"},
-#                 {"name": "Ashish", "username": "ashish"},
-#                 {"name": "Waqarul Hasan", "username": "waqarul_hasan"},
-#             ]
-
-#             # Helper: add employee + matching user account
-#             def _add_emp_with_user(emp_def, office_id):
-#                 uname = emp_def["username"]
-#                 # create Employee
-#                 emp = Employee(name=emp_def["name"], office_id=office_id, username=uname)
-#                 s.add(emp)
-#                 # create User for that employee (role=EMP) with password "<username>@51020"
-#                 pwd = f"{uname}@51020"
-#                 user = User(username=uname, password_hash=generate_password_hash(pwd), role=Role.EMP, office_id=office_id)
-#                 s.add(user)
-
-#             for e in employees_cnel:
-#                 _add_emp_with_user(e, cnel.id)
-
-#             for e in employees_psace:
-#                 _add_emp_with_user(e, psace.id)
-
-#             # Commit seeded data
-#             s.commit()
 
 def init_db(seed=False):
     Base.metadata.create_all(engine)
