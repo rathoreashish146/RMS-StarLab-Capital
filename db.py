@@ -110,6 +110,7 @@ def _safe_add_column(conn, table, coldef):
     if colname not in names:
         conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {coldef}"))
 
+
 # def init_db(seed=False):
 #     Base.metadata.create_all(engine)
 #     # lightweight migrations for old DBs
@@ -125,110 +126,148 @@ def _safe_add_column(conn, table, coldef):
 #     if seed:
 #         from werkzeug.security import generate_password_hash
 #         with SessionLocal() as s:
-#             if not s.query(Office).first():
-#                 east = Office(name="East")
-#                 west = Office(name="West")
-#                 s.add_all([east, west]); s.flush()
-#                 # Users
-#                 admin = User(username="admin", password_hash=generate_password_hash("admin"), role=Role.GM)
-#                 om_east = User(username="om_east", password_hash=generate_password_hash("om_east"), role=Role.OM, office_id=east.id)
-#                 emp_user = User(username="alice", password_hash=generate_password_hash("alice"), role=Role.EMP, office_id=east.id)
-#                 s.add_all([admin, om_east, emp_user])
-#                 # Employees
-#                 alice = Employee(name="Alice", office_id=east.id, username="alice", phone="9999999999")
-#                 bob = Employee(name="Bob", office_id=west.id, username=None)
-#                 s.add_all([alice, bob])
-#                 # Assets
-#                 laptop = Asset(name="Laptop", price=1200, quantity=5)
-#                 chair = Asset(name="Chair", price=100, quantity=20, allocation_type=AllocationType.OFFICE, allocation_id=east.id)
-#                 s.add_all([laptop, chair])
-#                 # Sample Request with price
-#                 r1 = Request(employee_id=1, office_id=east.id, asset_name="Laptop", quantity=1, price=1200)
-#                 s.add(r1)
+#             # --- Offices ---
+#             cnel = Office(name="Cloud Nebula Enterprises Lucknow")
+#             psace = Office(name="Prof. Shamim Ahmad AI Centre of Excellence")
+#             s.add_all([cnel, psace])
+#             s.flush()  # populate IDs
+
+#             # --- Users (GM + OMs) ---
+#             # GM
+#             gm_faisal = User(
+#                 username="faisal",
+#                 password_hash=generate_password_hash("faisal@51020"),
+#                 role=Role.GM,
+#                 office_id=None
+#             )
+
+#             # OM for CNEL
+#             om_mahtab_cnel = User(
+#                 username="mahtab",
+#                 password_hash=generate_password_hash("mahtab@51020"),
+#                 role=Role.OM,
+#                 office_id=cnel.id
+#             )
+
+#             # OM for PSACE (same person, separate account due to schema limits)
+#             om_mahtab_psace = User(
+#                 username="mahtab_ai",
+#                 password_hash=generate_password_hash("mahtab@51020"),
+#                 role=Role.OM,
+#                 office_id=psace.id
+#             )
+
+#             s.add_all([gm_faisal, om_mahtab_cnel, om_mahtab_psace])
+#             s.flush()
+
+#             # --- Employees + corresponding User accounts ---
+#             # Cloud Nebula Enterprises Lucknow employees
+#             employees_cnel = [
+#                 {"name": "Mohd Rehbar", "username": "mohd_rehbar"},
+#                 {"name": "Mohd Yousuf Khan", "username": "mohd_yousuf"},
+#                 {"name": "Nawab Shahzeb Uddin", "username": "nawab_shahzeb"},
+#                 {"name": "Haider Ali", "username": "haider_ali"},
+#             ]
+
+#             # Prof. Shamim Ahmad AI Centre of Excellence employees
+#             employees_psace = [
+#                 {"name": "Mahtab Alam", "username": "mahtab_alam"},  # avoids collision with OM 'mahtab'
+#                 {"name": "Vikalp Varshney", "username": "vikalp_varshney"},
+#                 {"name": "Imaad Hasan", "username": "imaad_hasan"},
+#                 {"name": "Ashish", "username": "ashish"},
+#                 {"name": "Waqarul Hasan", "username": "waqarul_hasan"},
+#             ]
+
+#             # Helper: add employee + matching user account
+#             def _add_emp_with_user(emp_def, office_id):
+#                 uname = emp_def["username"]
+#                 # create Employee
+#                 emp = Employee(name=emp_def["name"], office_id=office_id, username=uname)
+#                 s.add(emp)
+#                 # create User for that employee (role=EMP) with password "<username>@51020"
+#                 pwd = f"{uname}@51020"
+#                 user = User(username=uname, password_hash=generate_password_hash(pwd), role=Role.EMP, office_id=office_id)
+#                 s.add(user)
+
+#             for e in employees_cnel:
+#                 _add_emp_with_user(e, cnel.id)
+
+#             for e in employees_psace:
+#                 _add_emp_with_user(e, psace.id)
+
+#             # Commit seeded data
 #             s.commit()
+
 def init_db(seed=False):
     Base.metadata.create_all(engine)
-    # lightweight migrations for old DBs
-    try:
-        with engine.begin() as conn:
-            _safe_add_column(conn, "employees", "phone VARCHAR")
-            _safe_add_column(conn, "employees", "username VARCHAR")
-            _safe_add_column(conn, "requests", "price FLOAT")
-            _safe_add_column(conn, "requests", "bill_path VARCHAR")
-    except Exception:
-        pass
 
-    if seed:
-        from werkzeug.security import generate_password_hash
-        with SessionLocal() as s:
-            # --- Offices ---
-            cnel = Office(name="Cloud Nebula Enterprises Lucknow")
-            psace = Office(name="Prof. Shamim Ahmad AI Centre of Excellence")
-            s.add_all([cnel, psace])
-            s.flush()  # populate IDs
+    if not seed:
+        return
 
-            # --- Users (GM + OMs) ---
-            # GM
-            gm_faisal = User(
-                username="faisal",
-                password_hash=generate_password_hash("faisal@51020"),
-                role=Role.GM,
-                office_id=None
-            )
+    from werkzeug.security import generate_password_hash
+    with SessionLocal() as s:
+        # ---- Skip seeding if offices already exist ----
+        if s.query(Office).first():
+            print("Database already seeded — skipping.")
+            return
 
-            # OM for CNEL
-            om_mahtab_cnel = User(
-                username="mahtab",
-                password_hash=generate_password_hash("mahtab@51020"),
-                role=Role.OM,
-                office_id=cnel.id
-            )
+        # --- Offices ---
+        cnel = Office(name="Cloud Nebula Enterprises Lucknow")
+        psace = Office(name="Prof. Shamim Ahmad AI Centre of Excellence")
+        s.add_all([cnel, psace])
+        s.flush()  # populate IDs
 
-            # OM for PSACE (same person, separate account due to schema limits)
-            om_mahtab_psace = User(
-                username="mahtab_ai",
-                password_hash=generate_password_hash("mahtab@51020"),
-                role=Role.OM,
-                office_id=psace.id
-            )
+        # --- Users (GM + OMs) ---
+        gm_faisal = User(
+            username="faisal",
+            password_hash=generate_password_hash("faisal@51020"),
+            role=Role.GM,
+            office_id=None
+        )
+        om_mahtab_cnel = User(
+            username="mahtab",
+            password_hash=generate_password_hash("mahtab@51020"),
+            role=Role.OM,
+            office_id=cnel.id
+        )
+        om_mahtab_psace = User(
+            username="mahtab_ai",
+            password_hash=generate_password_hash("mahtab@51020"),
+            role=Role.OM,
+            office_id=psace.id
+        )
+        s.add_all([gm_faisal, om_mahtab_cnel, om_mahtab_psace])
+        s.flush()
 
-            s.add_all([gm_faisal, om_mahtab_cnel, om_mahtab_psace])
-            s.flush()
+        # --- Employees + corresponding Users ---
+        employees_cnel = [
+            {"name": "Mohd Rehbar", "username": "mohd_rehbar"},
+            {"name": "Mohd Yousuf Khan", "username": "mohd_yousuf"},
+            {"name": "Nawab Shahzeb Uddin", "username": "nawab_shahzeb"},
+            {"name": "Haider Ali", "username": "haider_ali"},
+        ]
+        employees_psace = [
+            {"name": "Mahtab Alam", "username": "mahtab_alam"},
+            {"name": "Vikalp Varshney", "username": "vikalp_varshney"},
+            {"name": "Imaad Hasan", "username": "imaad_hasan"},
+            {"name": "Ashish", "username": "ashish"},
+            {"name": "Waqarul Hasan", "username": "waqarul_hasan"},
+        ]
 
-            # --- Employees + corresponding User accounts ---
-            # Cloud Nebula Enterprises Lucknow employees
-            employees_cnel = [
-                {"name": "Mohd Rehbar", "username": "mohd_rehbar"},
-                {"name": "Mohd Yousuf Khan", "username": "mohd_yousuf"},
-                {"name": "Nawab Shahzeb Uddin", "username": "nawab_shahzeb"},
-                {"name": "Haider Ali", "username": "haider_ali"},
-            ]
+        def _add_emp_with_user(emp_def, office_id):
+            uname = emp_def["username"]
+            emp = Employee(name=emp_def["name"], office_id=office_id, username=uname)
+            s.add(emp)
+            pwd = f"{uname}@51020"
+            user = User(username=uname, password_hash=generate_password_hash(pwd),
+                        role=Role.EMP, office_id=office_id)
+            s.add(user)
 
-            # Prof. Shamim Ahmad AI Centre of Excellence employees
-            employees_psace = [
-                {"name": "Mahtab Alam", "username": "mahtab_alam"},  # avoids collision with OM 'mahtab'
-                {"name": "Vikalp Varshney", "username": "vikalp_varshney"},
-                {"name": "Imaad Hasan", "username": "imaad_hasan"},
-                {"name": "Ashish", "username": "ashish"},
-                {"name": "Waqarul Hasan", "username": "waqarul_hasan"},
-            ]
+        for e in employees_cnel:
+            _add_emp_with_user(e, cnel.id)
+        for e in employees_psace:
+            _add_emp_with_user(e, psace.id)
 
-            # Helper: add employee + matching user account
-            def _add_emp_with_user(emp_def, office_id):
-                uname = emp_def["username"]
-                # create Employee
-                emp = Employee(name=emp_def["name"], office_id=office_id, username=uname)
-                s.add(emp)
-                # create User for that employee (role=EMP) with password "<username>@51020"
-                pwd = f"{uname}@51020"
-                user = User(username=uname, password_hash=generate_password_hash(pwd), role=Role.EMP, office_id=office_id)
-                s.add(user)
+        s.commit()
+        print("✅ Seeded initial offices, users, and employees.")
 
-            for e in employees_cnel:
-                _add_emp_with_user(e, cnel.id)
-
-            for e in employees_psace:
-                _add_emp_with_user(e, psace.id)
-
-            # Commit seeded data
-            s.commit()
