@@ -4,9 +4,11 @@ from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from sqlalchemy import text
 import enum, os, datetime
 
-DB_PATH = os.environ.get("RMS_DB_PATH", "rms.db")
+# DB_PATH = os.environ.get("RMS_DB_PATH", "rms.db")
+DB_PATH = "postgresql://rms_38f2_user:h2XOIhTv7TQXvz72E5GuJgFx50S6QgHf@dpg-d44oeffgi27c73aeg36g-a/rms_38f2"
 # Safer for threaded servers if needed:
-engine = create_engine(f"sqlite:///{DB_PATH}", echo=False, future=True, connect_args={"check_same_thread": False})
+# engine = create_engine(f"sqlite:///{DB_PATH}", echo=False, future=True, connect_args={"check_same_thread": False})
+engine = create_engine(DB_PATH, echo=False, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 Base = declarative_base()
 
