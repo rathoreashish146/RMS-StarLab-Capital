@@ -1,3 +1,4 @@
+
 # # ---------------------------------------------------------------------------
 # # app.py (RMS — pastel blue / glassmorphism, with requested fixes)
 # # ---------------------------------------------------------------------------
@@ -55,43 +56,450 @@
 # <html>
 # <head>
 #   <meta charset="UTF-8">
-#   <title>RMS</title>
+#   <title>RMS - Resource Management System</title>
 #   <link rel="preconnect" href="https://fonts.googleapis.com">
 #   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-#   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+#   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 #   {%metas%}{%favicon%}{%css%}
 #   <style>
 #     :root{
-#       --bg:#f7f8fb; --card:#ffffff; --text:#131824; --muted:#6b7280;
-#       --primary:#6366f1; --primary-600:#5458ee; --danger:#ef4444; --border:#e5e7eb;
-#       --radius:12px; --shadow:0 6px 18px rgba(17,24,39,.06);
+#       --bg:#f3f4f6; --bg-alt:#ffffff;
+#       --card:#ffffff; --card-hover:#fafbfc;
+#       --text:#0f172a; --text-secondary:#475569; --muted:#64748b;
+#       --primary:#3b82f6; --primary-hover:#2563eb; --primary-light:#dbeafe;
+#       --success:#10b981; --success-light:#d1fae5;
+#       --warning:#f59e0b; --warning-light:#fef3c7;
+#       --danger:#ef4444; --danger-hover:#dc2626; --danger-light:#fee2e2;
+#       --border:#e2e8f0; --border-focus:#3b82f6;
+#       --radius:10px; --radius-lg:14px;
+#       --shadow:0 1px 3px rgba(15,23,42,.08), 0 1px 2px rgba(15,23,42,.06);
+#       --shadow-lg:0 10px 25px -5px rgba(15,23,42,.1), 0 8px 10px -6px rgba(15,23,42,.04);
+#       --shadow-xl:0 20px 30px -10px rgba(15,23,42,.12);
 #     }
-#     html,body{height:100%;}
-#     body{background:var(--bg); font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial; color:var(--text); line-height:1.35; padding:24px;}
-#     nav a{ color:var(--primary); text-decoration:none; font-weight:600; }
-#     nav a:hover{ text-decoration:underline; }
-#     nav{ background:var(--card); padding:10px 14px; border:1px solid var(--border);
-#          border-radius:var(--radius); box-shadow:var(--shadow); margin-bottom:16px;}
-#     h2,h3,h4{ margin:8px 0 12px 0; }
-#     .card{ background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
-#            box-shadow:var(--shadow); padding:16px; margin:10px 0;}
-#     .btn{ background:var(--primary); color:white; border:none; padding:8px 14px;
-#           border-radius:10px; font-weight:600; cursor:pointer; transition:.15s transform ease, .15s background ease;
-#           margin-right:8px; margin-top:6px;}
-#     .btn:hover{ background:var(--primary-600); transform:translateY(-1px); }
-#     .btn-outline{ background:transparent; color:var(--primary); border:1px solid var(--primary); }
-#     .btn-danger{ background:var(--danger); }
-#     .input, .dash-dropdown, textarea{ padding:8px 10px; border:1px solid var(--border); border-radius:10px;
-#        background:white; outline:none; width:100%; max-width:560px; margin-right:8px; margin-bottom:8px;}
-#     .two-col{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-#     .kpi{ display:inline-block; min-width:210px; padding:14px 16px; margin-right:10px;
-#           background:linear-gradient(180deg, #fff, #fbfbff); border:1px solid var(--border);
-#           border-radius:14px; box-shadow:var(--shadow); }
-#     .kpi .label{ color:#6b7280; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.06em;}
-#     .kpi .value{ font-size:22px; font-weight:700; margin-top:4px;}
-#     .hr{ height:1px; background:var(--border); margin:16px 0;}
-#     .muted{ color:#6b7280; }
-#     .stack{ display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
+    
+#     * { box-sizing: border-box; }
+    
+#     html, body { 
+#       height: 100%; 
+#       margin: 0; 
+#       padding: 0;
+#     }
+    
+#     body { 
+#       background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
+#       font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, 'Helvetica Neue', Arial, sans-serif;
+#       color: var(--text);
+#       line-height: 1.6;
+#       padding: 20px;
+#       min-height: 100vh;
+#     }
+    
+#     /* Typography */
+#     h2, h3, h4 { 
+#       margin: 0 0 20px 0; 
+#       font-weight: 700;
+#       color: var(--text);
+#       letter-spacing: -0.02em;
+#     }
+#     h2 { font-size: 28px; }
+#     h3 { font-size: 24px; }
+#     h4 { 
+#       font-size: 18px; 
+#       font-weight: 600;
+#       margin-bottom: 16px;
+#     }
+    
+#     /* Enhanced Navigation */
+#     nav { 
+#       background: var(--card);
+#       padding: 16px 24px;
+#       border: 1px solid var(--border);
+#       border-radius: var(--radius-lg);
+#       box-shadow: var(--shadow-lg);
+#       margin-bottom: 24px;
+#       display: flex;
+#       align-items: center;
+#       flex-wrap: wrap;
+#       gap: 8px;
+#     }
+    
+#     nav a { 
+#       color: var(--text-secondary);
+#       text-decoration: none;
+#       font-weight: 600;
+#       font-size: 14px;
+#       padding: 8px 16px;
+#       border-radius: var(--radius);
+#       transition: all 0.2s ease;
+#       position: relative;
+#     }
+    
+#     nav a:hover { 
+#       color: var(--primary);
+#       background: var(--primary-light);
+#       transform: translateY(-1px);
+#     }
+    
+#     nav span { 
+#       color: var(--border);
+#       margin: 0 4px;
+#     }
+    
+#     /* Enhanced Cards */
+#     .card { 
+#       background: var(--card);
+#       border: 1px solid var(--border);
+#       border-radius: var(--radius-lg);
+#       box-shadow: var(--shadow-lg);
+#       padding: 28px;
+#       margin: 16px 0;
+#       transition: all 0.3s ease;
+#     }
+    
+#     .card:hover {
+#       box-shadow: var(--shadow-xl);
+#     }
+    
+#     /* Enhanced Buttons */
+#     .btn { 
+#       background: var(--primary);
+#       color: white;
+#       border: none;
+#       padding: 11px 20px;
+#       border-radius: var(--radius);
+#       font-weight: 600;
+#       font-size: 14px;
+#       cursor: pointer;
+#       transition: all 0.2s ease;
+#       margin-right: 10px;
+#       margin-top: 8px;
+#       box-shadow: 0 1px 2px rgba(59,130,246,.2);
+#       display: inline-flex;
+#       align-items: center;
+#       gap: 6px;
+#     }
+    
+#     .btn:hover { 
+#       background: var(--primary-hover);
+#       transform: translateY(-2px);
+#       box-shadow: 0 4px 8px rgba(59,130,246,.3);
+#     }
+    
+#     .btn:active {
+#       transform: translateY(0);
+#     }
+    
+#     .btn-outline { 
+#       background: transparent;
+#       color: var(--primary);
+#       border: 2px solid var(--primary);
+#       box-shadow: none;
+#     }
+    
+#     .btn-outline:hover {
+#       background: var(--primary-light);
+#       box-shadow: 0 2px 4px rgba(59,130,246,.15);
+#     }
+    
+#     .btn-danger { 
+#       background: var(--danger);
+#       box-shadow: 0 1px 2px rgba(239,68,68,.2);
+#     }
+    
+#     .btn-danger:hover {
+#       background: var(--danger-hover);
+#       box-shadow: 0 4px 8px rgba(239,68,68,.3);
+#     }
+    
+#     /* Enhanced Inputs */
+#     .input, .dash-dropdown, textarea { 
+#       padding: 11px 14px;
+#       border: 2px solid var(--border);
+#       border-radius: var(--radius);
+#       background: var(--bg-alt);
+#       outline: none;
+#       width: 100%;
+#       max-width: 560px;
+#       margin-right: 10px;
+#       margin-bottom: 12px;
+#       font-size: 14px;
+#       font-family: inherit;
+#       transition: all 0.2s ease;
+#       color: var(--text);
+#     }
+    
+#     .input:focus, textarea:focus {
+#       border-color: var(--border-focus);
+#       box-shadow: 0 0 0 3px rgba(59,130,246,.1);
+#     }
+    
+#     .input::placeholder, textarea::placeholder {
+#       color: var(--muted);
+#     }
+    
+#     textarea {
+#       resize: vertical;
+#       min-height: 80px;
+#     }
+    
+#     /* Form Layouts */
+#     .two-col { 
+#       display: grid;
+#       grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+#       gap: 16px;
+#       margin-bottom: 16px;
+#     }
+    
+#     .form-group {
+#       margin-bottom: 20px;
+#     }
+    
+#     .form-label {
+#       display: block;
+#       font-weight: 600;
+#       font-size: 13px;
+#       color: var(--text-secondary);
+#       margin-bottom: 8px;
+#       text-transform: uppercase;
+#       letter-spacing: 0.05em;
+#     }
+    
+#     /* Enhanced KPI Cards */
+#     .kpi { 
+#       display: inline-block;
+#       min-width: 240px;
+#       padding: 20px 24px;
+#       margin: 8px;
+#       background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+#       border: 1px solid var(--border);
+#       border-radius: var(--radius-lg);
+#       box-shadow: var(--shadow);
+#       transition: all 0.3s ease;
+#       position: relative;
+#       overflow: hidden;
+#     }
+    
+#     .kpi::before {
+#       content: '';
+#       position: absolute;
+#       top: 0;
+#       left: 0;
+#       width: 4px;
+#       height: 100%;
+#       background: var(--primary);
+#       opacity: 0;
+#       transition: opacity 0.3s ease;
+#     }
+    
+#     .kpi:hover {
+#       transform: translateY(-4px);
+#       box-shadow: var(--shadow-lg);
+#     }
+    
+#     .kpi:hover::before {
+#       opacity: 1;
+#     }
+    
+#     .kpi .label { 
+#       color: var(--muted);
+#       font-size: 11px;
+#       font-weight: 700;
+#       text-transform: uppercase;
+#       letter-spacing: 0.08em;
+#       margin-bottom: 8px;
+#     }
+    
+#     .kpi .value { 
+#       font-size: 28px;
+#       font-weight: 800;
+#       margin-top: 6px;
+#       color: var(--text);
+#       line-height: 1.2;
+#     }
+    
+#     /* Utilities */
+#     .hr { 
+#       height: 1px;
+#       background: linear-gradient(to right, transparent, var(--border), transparent);
+#       margin: 28px 0;
+#       border: none;
+#     }
+    
+#     .muted { 
+#       color: var(--muted);
+#       font-size: 14px;
+#     }
+    
+#     .stack { 
+#       display: flex;
+#       flex-wrap: wrap;
+#       gap: 12px;
+#       align-items: center;
+#       margin: 16px 0;
+#     }
+    
+#     .pad-top {
+#       padding-top: 16px;
+#     }
+    
+#     /* Status Badges */
+#     .badge {
+#       display: inline-block;
+#       padding: 4px 12px;
+#       border-radius: 12px;
+#       font-size: 12px;
+#       font-weight: 600;
+#       text-transform: uppercase;
+#       letter-spacing: 0.05em;
+#     }
+    
+#     .badge-success {
+#       background: var(--success-light);
+#       color: var(--success);
+#     }
+    
+#     .badge-warning {
+#       background: var(--warning-light);
+#       color: var(--warning);
+#     }
+    
+#     .badge-danger {
+#       background: var(--danger-light);
+#       color: var(--danger);
+#     }
+    
+#     .badge-info {
+#       background: var(--primary-light);
+#       color: var(--primary);
+#     }
+    
+#     /* Message Styles */
+#     .message {
+#       padding: 12px 16px;
+#       border-radius: var(--radius);
+#       margin: 12px 0;
+#       font-size: 14px;
+#       font-weight: 500;
+#     }
+    
+#     .message-error {
+#       background: var(--danger-light);
+#       color: var(--danger);
+#       border-left: 4px solid var(--danger);
+#     }
+    
+#     .message-success {
+#       background: var(--success-light);
+#       color: var(--success);
+#       border-left: 4px solid var(--success);
+#     }
+    
+#     .message-info {
+#       background: var(--primary-light);
+#       color: var(--primary);
+#       border-left: 4px solid var(--primary);
+#     }
+    
+#     .message-warning {
+#       background: var(--warning-light);
+#       color: var(--warning);
+#       border-left: 4px solid var(--warning);
+#     }
+    
+#     /* Table Enhancements */
+#     .dash-table-container {
+#       margin-top: 16px;
+#       border-radius: var(--radius);
+#       overflow: hidden;
+#       border: 1px solid var(--border);
+#     }
+    
+#     .dash-spreadsheet {
+#       border: none !important;
+#     }
+    
+#     .dash-spreadsheet-container {
+#       overflow-x: auto;
+#     }
+    
+#     /* Radio Items Enhancement */
+#     input[type="radio"] {
+#       margin-right: 8px;
+#       accent-color: var(--primary);
+#     }
+    
+#     /* Upload Component */
+#     .dash-upload {
+#       display: inline-block;
+#       margin-bottom: 16px;
+#     }
+    
+#     /* Dropdown Enhancement */
+#     .Select-control {
+#       border-color: var(--border) !important;
+#       border-width: 2px !important;
+#       border-radius: var(--radius) !important;
+#     }
+    
+#     .Select-control:hover {
+#       border-color: var(--primary) !important;
+#     }
+    
+#     .is-focused .Select-control {
+#       border-color: var(--border-focus) !important;
+#       box-shadow: 0 0 0 3px rgba(59,130,246,.1) !important;
+#     }
+    
+#     /* Responsive Design */
+#     @media (max-width: 768px) {
+#       body {
+#         padding: 12px;
+#       }
+      
+#       .card {
+#         padding: 20px;
+#       }
+      
+#       nav {
+#         padding: 12px 16px;
+#       }
+      
+#       .two-col {
+#         grid-template-columns: 1fr;
+#       }
+      
+#       .kpi {
+#         min-width: 100%;
+#         margin: 8px 0;
+#       }
+      
+#       h2 { font-size: 24px; }
+#       h3 { font-size: 20px; }
+#     }
+    
+#     /* Loading State */
+#     ._dash-loading {
+#       opacity: 0.7;
+#     }
+    
+#     /* Scrollbar Styling */
+#     ::-webkit-scrollbar {
+#       width: 8px;
+#       height: 8px;
+#     }
+    
+#     ::-webkit-scrollbar-track {
+#       background: var(--bg);
+#     }
+    
+#     ::-webkit-scrollbar-thumb {
+#       background: var(--border);
+#       border-radius: 4px;
+#     }
+    
+#     ::-webkit-scrollbar-thumb:hover {
+#       background: var(--muted);
+#     }
 #   </style>
 # </head>
 # <body>
@@ -149,38 +557,57 @@
 #     user = current_user()
 #     if not user:
 #         return html.Nav([])
-#     items = []
+    
+#     # Build navigation items based on role
+#     nav_items = []
 #     if user.role == Role.EMP:
-#         items = [
-#             dcc.Link("Dashboard", href="/"), html.Span(" | "),
-#             dcc.Link("My Assets", href="/assets"), html.Span(" | "),
-#             dcc.Link("Requests", href="/requests"), html.Span(" | "),
-#             dcc.Link("My Profile", href="/profile"), html.Span(" | "),
+#         nav_items = [
+#             dcc.Link("📊 Dashboard", href="/"),
+#             dcc.Link("💼 My Assets", href="/assets"),
+#             dcc.Link("📝 Requests", href="/requests"),
+#             dcc.Link("👤 My Profile", href="/profile"),
 #         ]
 #     else:
-#         items = [
-#             dcc.Link("Dashboard", href="/"), html.Span(" | "),
-#             dcc.Link("Assets", href="/assets"), html.Span(" | "),
-#             dcc.Link("Requests", href="/requests"), html.Span(" | "),
-#             dcc.Link("Reports", href="/reports"), html.Span(" | "),
+#         nav_items = [
+#             dcc.Link("📊 Dashboard", href="/"),
+#             dcc.Link("💼 Assets", href="/assets"),
+#             dcc.Link("📝 Requests", href="/requests"),
+#             dcc.Link("📈 Reports", href="/reports"),
 #         ]
 #         if user.role == Role.GM:
-#             items.extend([dcc.Link("Admin", href="/admin"), html.Span(" | ")])
+#             nav_items.append(dcc.Link("⚙️ Admin", href="/admin"))
 #         else:
-#             items.extend([dcc.Link("Employees", href="/employees"), html.Span(" | ")])
-#     items.append(dcc.Link("Logout", href="/logout"))
-#     return html.Nav(items)
+#             nav_items.append(dcc.Link("👥 Employees", href="/employees"))
+    
+#     # Add user info and logout
+#     user_info = html.Div([
+#         html.Span(f"{user.username}", style={"color": "var(--text-secondary)", "fontWeight": "600", "marginRight": "12px"}),
+#         html.Span(f"({role_name(user.role.value)})", style={"color": "var(--muted)", "fontSize": "13px", "marginRight": "16px"}),
+#         dcc.Link("🚪 Logout", href="/logout", style={"color": "var(--danger)"})
+#     ], style={"marginLeft": "auto", "display": "flex", "alignItems": "center"})
+    
+#     return html.Nav(nav_items + [user_info], style={"display": "flex", "alignItems": "center", "gap": "4px"})
 
 # def login_layout():
 #     return html.Div([
 #         navbar(),
+#         html.Div(style={"maxWidth": "480px", "margin": "60px auto"}, children=[
 #         html.Div(className="card", children=[
-#             html.H2("Resource Management System — Login"),
-#             dcc.Input(id="login-username", placeholder="Username", className="input"),
-#             dcc.Input(id="login-password", type="password", placeholder="Password", className="input"),
-#             html.Button("Login", id="login-btn", className="btn"),
-#             html.Div(id="login-msg", style={"color": "crimson", "marginTop": "8px"}),
-#             # html.Div(className="muted", children="Default demo users: admin/admin, om_east/om_east, alice/alice")
+#                 html.Div(style={"textAlign": "center", "marginBottom": "32px"}, children=[
+#                     html.H2("🔐 Welcome to RMS", style={"marginBottom": "8px"}),
+#                     html.Div("Resource Management System", className="muted")
+#                 ]),
+#                 html.Div(className="form-group", children=[
+#                     html.Label("Username", className="form-label"),
+#                     dcc.Input(id="login-username", placeholder="Enter your username", className="input", style={"maxWidth": "100%"}),
+#                 ]),
+#                 html.Div(className="form-group", children=[
+#                     html.Label("Password", className="form-label"),
+#                     dcc.Input(id="login-password", type="password", placeholder="Enter your password", className="input", style={"maxWidth": "100%"}),
+#                 ]),
+#                 html.Button("🔓 Login", id="login-btn", className="btn", style={"width": "100%", "marginTop": "8px"}),
+#                 html.Div(id="login-msg", style={"marginTop": "16px"}),
+#             ])
 #         ])
 #     ])
 
@@ -188,12 +615,18 @@
 #     user = current_user()
 #     if not user:
 #         return login_layout()
-#     scope = "Company-wide" if user.role == Role.GM else "Your office"
+#     scope = "Company-wide metrics" if user.role == Role.GM else "Your office metrics"
+#     welcome_emoji = "👨‍💼" if user.role == Role.GM else ("👔" if user.role == Role.OM else "👤")
 #     return html.Div([
 #         navbar(),
 #         html.Div(className="card", children=[
-#             html.H3(f"Dashboard — {role_name(user.role.value)}"),
-#             html.Div(className="muted", children=scope),
+#             html.Div(style={"marginBottom": "24px"}, children=[
+#                 html.H3(f"{welcome_emoji} Welcome, {user.username}!", style={"marginBottom": "8px"}),
+#                 html.Div(className="muted", children=[
+#                     html.Span(f"{role_name(user.role.value)} • ", style={"fontWeight": "600"}),
+#                     html.Span(scope)
+#                 ]),
+#             ]),
 #             html.Div(id="dashboard-cards", className="pad-top")
 #         ])
 #     ])
@@ -201,8 +634,18 @@
 # def _uploader_component(id_):
 #     return dcc.Upload(
 #         id=id_,
-#         children=html.Button("Upload Bill / Drag & Drop", className="btn btn-outline"),
-#         multiple=False
+#         children=html.Button("📎 Upload Bill / Drag & Drop", className="btn btn-outline"),
+#         multiple=False,
+#         style={
+#             "width": "100%",
+#             "borderRadius": "var(--radius)",
+#             "border": "2px dashed var(--border)",
+#             "padding": "20px",
+#             "textAlign": "center",
+#             "cursor": "pointer",
+#             "transition": "all 0.2s ease",
+#             "background": "var(--bg-alt)"
+#         }
 #     )
 
 # def _alloc_radio_for_user(user):
@@ -237,32 +680,53 @@
 #     user = current_user()
 #     if not user:
 #         return login_layout()
-#     header = "My Assets" if user.role == Role.EMP else "Assets"
-#     button_label = "Add to My Profile" if user.role == Role.EMP else "Add Asset"
+#     header = "💼 My Assets" if user.role == Role.EMP else "💼 Assets Management"
+#     button_label = "➕ Add to My Profile" if user.role == Role.EMP else "➕ Add Asset"
 #     radio_options, radio_default = _alloc_radio_for_user(user)
 #     return html.Div([
 #         navbar(),
 #         html.Div(className="card", children=[
-#             html.H3(header),
+#             html.H3(header, style={"marginBottom": "24px"}),
+#             html.Div(className="form-group", children=[
+#                 html.Label("📄 Upload Bill (Optional)", className="form-label"),
 #             _uploader_component("upload-bill"),
-#             html.Div(className="two-col", children=[
-#                 dcc.Input(id="asset-name", placeholder="Asset name *", className="input"),
-#                 dcc.Input(id="asset-price", placeholder="Price *", type="number", className="input"),
-#                 dcc.Input(id="asset-qty", placeholder="Quantity *", type="number", value=1, className="input"),
 #             ]),
+#             html.Div(className="two-col", children=[
+#                 html.Div(className="form-group", children=[
+#                     html.Label("Asset Name *", className="form-label"),
+#                     dcc.Input(id="asset-name", placeholder="e.g., Laptop, Desk, Monitor", className="input", style={"maxWidth": "100%"}),
+#                 ]),
+#                 html.Div(className="form-group", children=[
+#                     html.Label("Price *", className="form-label"),
+#                     dcc.Input(id="asset-price", placeholder="0.00", type="number", className="input", style={"maxWidth": "100%"}),
+#                 ]),
+#             ]),
+#             html.Div(className="form-group", children=[
+#                 html.Label("Quantity *", className="form-label"),
+#                 dcc.Input(id="asset-qty", placeholder="1", type="number", value=1, className="input", style={"maxWidth": "200px"}),
+#             ]),
+#             html.Div(className="form-group", children=[
+#                 html.Label("Allocation Type", className="form-label"),
 #             dcc.RadioItems(
 #                 id="alloc-type",
 #                 options=radio_options,
 #                 value=radio_default,
-#                 labelStyle={"display":"block", "margin":"6px 0"}
-#             ),
-#             dcc.Dropdown(id="alloc-target", placeholder="Choose office/employee (if applicable)", className="dash-dropdown"),
+#                     labelStyle={"display":"block", "margin":"10px 0", "fontWeight": "500", "color": "var(--text-secondary)"}
+#                 ),
+#             ]),
+#             html.Div(className="form-group", children=[
+#                 html.Label("Allocation Target", className="form-label"),
+#                 dcc.Dropdown(id="alloc-target", placeholder="Choose office/employee (if applicable)", className="dash-dropdown", style={"maxWidth": "100%"}),
+#             ]),
 #             html.Button(button_label, id="add-asset-btn", className="btn"),
-#             html.Div(id="asset-add-msg", style={"color":"crimson", "marginTop":"6px"}),
+#             html.Div(id="asset-add-msg", style={"marginTop":"16px"}),
 #             dcc.ConfirmDialog(id="asset-dialog"),
 #         ]),
 #         html.Div(className="card", children=[
-#             html.H4(f"{header} Table"),
+#             html.Div(style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginBottom": "16px"}, children=[
+#                 html.H4(f"{header} List", style={"margin": "0"}),
+#                 html.Div(className="badge badge-info", children="Live Data")
+#             ]),
 #             html.Div(id="assets-table")
 #         ])
 #     ])
@@ -274,12 +738,15 @@
 #     return html.Div([
 #         navbar(),
 #         html.Div(className="card", children=[
-#             html.H3("Requests"),
+#             html.H3("📝 New Request", style={"marginBottom": "24px"}),
 #             html.Div(id="request-form"),
 #             dcc.ConfirmDialog(id="req-dialog")
 #         ]),
 #         html.Div(className="card", children=[
-#             html.H4("Open Requests"),
+#             html.Div(style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginBottom": "16px"}, children=[
+#                 html.H4("📋 All Requests", style={"margin": "0"}),
+#                 html.Div(className="badge badge-warning", children="Pending Review")
+#             ]),
 #             html.Div(id="requests-table")
 #         ])
 #     ])
@@ -289,14 +756,19 @@
 #     if not user:
 #         return login_layout()
 #     if user.role == Role.EMP:
-#         return html.Div([navbar(), html.Div(className="card", children="Reports are not available for Employees.")])
+#         return html.Div([navbar(), html.Div(className="card", children=[
+#             html.Div(style={"textAlign": "center", "padding": "40px"}, children=[
+#                 html.H3("📊 Reports Unavailable"),
+#                 html.Div("Reports are only available for Managers.", className="muted")
+#             ])
+#         ])])
 #     return html.Div([
 #         navbar(),
 #         html.Div(className="card", children=[
-#             html.H3("Reports"),
+#             html.H3("📈 Analytics & Reports", style={"marginBottom": "24px"}),
 #             html.Div(id="reports-content"),
 #             dcc.ConfirmDialog(id="reports-dialog"),
-#             html.Div(id="reports-msg", style={"color":"crimson", "marginTop":"6px"}),
+#             html.Div(id="reports-msg", style={"marginTop":"16px"}),
 #         ])
 #     ])
 
@@ -305,23 +777,43 @@
 #     if not user:
 #         return login_layout()
 #     if user.role != Role.OM:
-#         return html.Div([navbar(), html.Div(className="card", children="Only Office Managers can manage employees.")])
+#         return html.Div([navbar(), html.Div(className="card", children=[
+#             html.Div(style={"textAlign": "center", "padding": "40px"}, children=[
+#                 html.H3("⚠️ Access Restricted"),
+#                 html.Div("Only Office Managers can manage employees.", className="muted")
+#             ])
+#         ])])
 #     return html.Div([
 #         navbar(),
 #         html.Div(className="card", children=[
-#             html.H3("Manage Employees"),
+#             html.H3("👥 Add New Employee", style={"marginBottom": "24px"}),
 #             html.Div(className="two-col", children=[
-#                 dcc.Input(id="emp-new-name", placeholder="Employee name *", className="input"),
-#                 dcc.Input(id="emp-new-phone", placeholder="Phone", className="input"),
-#                 dcc.Input(id="emp-new-username", placeholder="Username *", className="input"),
-#                 dcc.Input(id="emp-new-password", placeholder="Password *", className="input"),
+#                 html.Div(className="form-group", children=[
+#                     html.Label("Employee Name *", className="form-label"),
+#                     dcc.Input(id="emp-new-name", placeholder="Full name", className="input", style={"maxWidth": "100%"}),
+#                 ]),
+#                 html.Div(className="form-group", children=[
+#                     html.Label("Phone Number", className="form-label"),
+#                     dcc.Input(id="emp-new-phone", placeholder="(optional)", className="input", style={"maxWidth": "100%"}),
+#                 ]),
+#                 html.Div(className="form-group", children=[
+#                     html.Label("Username *", className="form-label"),
+#                     dcc.Input(id="emp-new-username", placeholder="Login username", className="input", style={"maxWidth": "100%"}),
+#                 ]),
+#                 html.Div(className="form-group", children=[
+#                     html.Label("Password *", className="form-label"),
+#                     dcc.Input(id="emp-new-password", type="password", placeholder="Initial password", className="input", style={"maxWidth": "100%"}),
+#                 ]),
 #             ]),
-#             html.Button("Add Employee", id="emp-add-btn", className="btn"),
+#             html.Button("➕ Add Employee", id="emp-add-btn", className="btn"),
 #             dcc.ConfirmDialog(id="emp-dialog"),
-#             html.Div(id="emp-add-msg", style={"color":"crimson", "marginTop":"6px"})
+#             html.Div(id="emp-add-msg", style={"marginTop":"16px"})
 #         ]),
 #         html.Div(className="card", children=[
-#             html.H4("Employees in My Office"),
+#             html.Div(style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginBottom": "16px"}, children=[
+#                 html.H4("📋 Employees in My Office", style={"margin": "0"}),
+#                 html.Div(className="badge badge-info", children="Active Staff")
+#             ]),
 #             html.Div(id="emp-table")
 #         ])
 #     ])
@@ -329,33 +821,62 @@
 # def admin_layout():
 #     user = current_user()
 #     if not user or user.role != Role.GM:
-#         return html.Div([navbar(), html.Div(className="card", children="Admins only.")])
+#         return html.Div([navbar(), html.Div(className="card", children=[
+#             html.Div(style={"textAlign": "center", "padding": "40px"}, children=[
+#                 html.H3("🔒 Admin Access Only"),
+#                 html.Div("This section is restricted to General Managers.", className="muted")
+#             ])
+#         ])])
 #     return html.Div([
 #         navbar(),
 #         html.Div(className="card", children=[
-#             html.H3("Admin — Offices & Managers"),
-#             html.H4("Create Office"),
-#             dcc.Input(id="new-office-name", placeholder="Office name *", className="input"),
-#             html.Button("Add Office", id="btn-add-office", className="btn"),
-#             html.Div(id="msg-add-office", className="muted", style={"marginTop":"6px"}),
-#             html.Div(className="hr"),
-#             html.H4("Create Office Manager"),
-#             html.Div(className="two-col", children=[
-#                 dcc.Dropdown(id="om-office", placeholder="Select office", className="dash-dropdown"),
-#                 dcc.Input(id="om-username", placeholder="Username *", className="input"),
-#                 dcc.Input(id="om-password", placeholder="Password *", className="input"),
+#             html.H3("⚙️ Admin Panel", style={"marginBottom": "8px"}),
+#             html.Div("Manage offices and office managers", className="muted", style={"marginBottom": "24px"}),
+            
+#             html.H4("🏢 Create Office", style={"marginTop": "24px"}),
+#             html.Div(className="form-group", children=[
+#                 html.Label("Office Name *", className="form-label"),
+#                 dcc.Input(id="new-office-name", placeholder="e.g., East Branch, West Branch", className="input"),
 #             ]),
-#             html.Button("Create OM", id="btn-create-om", className="btn"),
+#             html.Button("➕ Add Office", id="btn-add-office", className="btn"),
+#             html.Div(id="msg-add-office", style={"marginTop":"12px"}),
+            
+#             html.Div(className="hr"),
+            
+#             html.H4("👔 Create Office Manager"),
+#             html.Div(className="two-col", children=[
+#                 html.Div(className="form-group", children=[
+#                     html.Label("Select Office *", className="form-label"),
+#                     dcc.Dropdown(id="om-office", placeholder="Choose office", className="dash-dropdown", style={"maxWidth": "100%"}),
+#                 ]),
+#                 html.Div(className="form-group", children=[
+#                     html.Label("Username *", className="form-label"),
+#                     dcc.Input(id="om-username", placeholder="Login username", className="input", style={"maxWidth": "100%"}),
+#                 ]),
+#             ]),
+#             html.Div(className="form-group", children=[
+#                 html.Label("Password *", className="form-label"),
+#                 dcc.Input(id="om-password", type="password", placeholder="Initial password", className="input"),
+#             ]),
+#             html.Button("➕ Create OM", id="btn-create-om", className="btn"),
 #             dcc.ConfirmDialog(id="admin-dialog"),
-#             html.Div(id="msg-create-om", className="muted", style={"marginTop":"6px"}),
+#             html.Div(id="msg-create-om", style={"marginTop":"12px"}),
+            
 #             html.Div(className="hr"),
-#             html.H4("Reset OM Password"),
+            
+#             html.H4("🔑 Reset OM Password"),
 #             html.Div(className="two-col", children=[
-#                 dcc.Dropdown(id="om-existing", placeholder="Select OM user", className="dash-dropdown"),
-#                 dcc.Input(id="om-new-pass", placeholder="New password *", className="input"),
+#                 html.Div(className="form-group", children=[
+#                     html.Label("Select OM User *", className="form-label"),
+#                     dcc.Dropdown(id="om-existing", placeholder="Choose OM", className="dash-dropdown", style={"maxWidth": "100%"}),
+#                 ]),
+#                 html.Div(className="form-group", children=[
+#                     html.Label("New Password *", className="form-label"),
+#                     dcc.Input(id="om-new-pass", type="password", placeholder="Enter new password", className="input", style={"maxWidth": "100%"}),
+#                 ]),
 #             ]),
-#             html.Button("Reset Password", id="btn-om-reset", className="btn btn-outline"),
-#             html.Div(id="msg-om-reset", className="muted", style={"marginTop":"6px"}),
+#             html.Button("🔄 Reset Password", id="btn-om-reset", className="btn btn-outline"),
+#             html.Div(id="msg-om-reset", style={"marginTop":"12px"}),
 #         ])
 #     ])
 
@@ -366,11 +887,11 @@
 #     return html.Div([
 #         navbar(),
 #         html.Div(className="card", children=[
-#             html.H3("My Profile"),
+#             html.H3("👤 My Profile", style={"marginBottom": "24px"}),
 #             html.Div(id="profile-form"),
 #             # Kept component but we'll NEVER display it (req #5)
 #             dcc.ConfirmDialog(id="profile-dialog"),
-#             html.Div(id="profile-msg", style={"color":"crimson", "marginTop":"6px"}),
+#             html.Div(id="profile-msg", style={"marginTop":"16px"}),
 #         ])
 #     ])
 
@@ -416,7 +937,7 @@
 #             with SessionLocal() as s2:
 #                 u = s2.query(User).filter(User.username == uname).first()
 #         if not u or not check_password_hash(u.password_hash, pwd):
-#             return "Invalid credentials"
+#             return html.Div("❌ Invalid credentials. Please try again.", className="message message-error")
 #         session["user_id"] = u.id
 #         return dcc.Location(href="/", id="redir")
 
@@ -474,11 +995,11 @@
 #     try: qty_val = int(qty or 0)
 #     except Exception: qty_val = 0
 #     if not name:
-#         return ("Asset name is required.", render_assets_table(), "", False, name, price, qty, contents)
+#         return (html.Div("❌ Asset name is required.", className="message message-error"), render_assets_table(), "", False, name, price, qty, contents)
 #     if price_val <= 0:
-#         return ("Price must be greater than 0.", render_assets_table(), "", False, name, price, qty, contents)
+#         return (html.Div("❌ Price must be greater than 0.", className="message message-error"), render_assets_table(), "", False, name, price, qty, contents)
 #     if qty_val < 1:
-#         return ("Quantity must be at least 1.", render_assets_table(), "", False, name, price, qty, contents)
+#         return (html.Div("❌ Quantity must be at least 1.", className="message message-error"), render_assets_table(), "", False, name, price, qty, contents)
 
 #     saved_path = None
 #     if contents and filename:
@@ -514,7 +1035,7 @@
 #         s.add(Asset(name=name, price=price_val, quantity=qty_val, bill_path=saved_path,
 #                     allocation_type=a_type, allocation_id=a_id))
 #         s.commit()
-#     return ("", render_assets_table(), "Asset added.", True, "", "", 1, None)
+#     return (html.Div("✅ Asset added successfully!", className="message message-success"), render_assets_table(), "Asset added.", True, "", "", 1, None)
 
 # def _bill_link_path(path):
 #     if not path:
@@ -620,31 +1141,59 @@
 #             emp = _employee_for_user(user, s)
 #             options = [{"label": emp.name, "value": emp.id}] if emp else []
 #             return html.Div([
-#                 html.B("Create Request"),
-#                 dcc.Dropdown(id="req-employee", options=options, value=(emp.id if emp else None), className="dash-dropdown", disabled=True),
-#                 html.Div(className="two-col", children=[
-#                     dcc.Input(id="req-asset-name", placeholder="Asset name", className="input"),
-#                     dcc.Input(id="req-qty", type="number", value=1, className="input"),
-#                     dcc.Input(id="req-price", placeholder="Price", type="number", className="input"),
+#                 html.Div(className="form-group", children=[
+#                     html.Label("Employee (Auto-selected)", className="form-label"),
+#                     dcc.Dropdown(id="req-employee", options=options, value=(emp.id if emp else None), className="dash-dropdown", disabled=True, style={"maxWidth": "100%"}),
 #                 ]),
-#                 _uploader_component("req-bill"),
-#                 html.Button("Submit Request", id="req-submit", className="btn"),
-#                 html.Div(id="req-msg", style={"marginTop":"6px","color":"crimson"})
+#                 html.Div(className="two-col", children=[
+#                     html.Div(className="form-group", children=[
+#                         html.Label("Asset Name *", className="form-label"),
+#                         dcc.Input(id="req-asset-name", placeholder="What asset do you need?", className="input", style={"maxWidth": "100%"}),
+#                     ]),
+#                     html.Div(className="form-group", children=[
+#                         html.Label("Quantity *", className="form-label"),
+#                         dcc.Input(id="req-qty", type="number", value=1, className="input", style={"maxWidth": "100%"}),
+#                     ]),
+#                 ]),
+#                 html.Div(className="form-group", children=[
+#                     html.Label("Price (Optional)", className="form-label"),
+#                     dcc.Input(id="req-price", placeholder="Estimated price", type="number", className="input"),
+#                 ]),
+#                 html.Div(className="form-group", children=[
+#                     html.Label("📄 Upload Bill (Optional)", className="form-label"),
+#                     _uploader_component("req-bill"),
+#                 ]),
+#                 html.Button("✅ Submit Request", id="req-submit", className="btn"),
+#                 html.Div(id="req-msg", style={"marginTop":"16px"})
 #             ])
 #         employees = s.query(Employee).filter(Employee.office_id == user.office_id).all() \
 #             if user.role == Role.OM else s.query(Employee).all()
 #         options = [{"label": e.name, "value": e.id} for e in employees]
 #         return html.Div([
-#             html.B("Create Request"),
-#             dcc.Dropdown(id="req-employee", options=options, placeholder="Employee", className="dash-dropdown"),
-#             html.Div(className="two-col", children=[
-#                 dcc.Input(id="req-asset-name", placeholder="Asset name", className="input"),
-#                 dcc.Input(id="req-qty", type="number", value=1, className="input"),
-#                 dcc.Input(id="req-price", placeholder="Price", type="number", className="input"),
+#             html.Div(className="form-group", children=[
+#                 html.Label("Select Employee *", className="form-label"),
+#                 dcc.Dropdown(id="req-employee", options=options, placeholder="Choose employee", className="dash-dropdown", style={"maxWidth": "100%"}),
 #             ]),
-#             _uploader_component("req-bill"),
-#             html.Button("Submit Request", id="req-submit", className="btn"),
-#             html.Div(id="req-msg", style={"marginTop":"6px","color":"crimson"})
+#             html.Div(className="two-col", children=[
+#                 html.Div(className="form-group", children=[
+#                     html.Label("Asset Name *", className="form-label"),
+#                     dcc.Input(id="req-asset-name", placeholder="What asset is needed?", className="input", style={"maxWidth": "100%"}),
+#                 ]),
+#                 html.Div(className="form-group", children=[
+#                     html.Label("Quantity *", className="form-label"),
+#                     dcc.Input(id="req-qty", type="number", value=1, className="input", style={"maxWidth": "100%"}),
+#                 ]),
+#             ]),
+#             html.Div(className="form-group", children=[
+#                 html.Label("Price (Optional)", className="form-label"),
+#                 dcc.Input(id="req-price", placeholder="Estimated price", type="number", className="input"),
+#             ]),
+#             html.Div(className="form-group", children=[
+#                 html.Label("📄 Upload Bill (Optional)", className="form-label"),
+#                 _uploader_component("req-bill"),
+#             ]),
+#             html.Button("✅ Submit Request", id="req-submit", className="btn"),
+#             html.Div(id="req-msg", style={"marginTop":"16px"})
 #         ])
 
 # @app.callback(
@@ -677,9 +1226,9 @@
 #     try: price_val = float(price or 0)
 #     except Exception: price_val = 0.0
 #     if not asset_name:
-#         return "Please enter an asset name.", render_requests_table(), "", False, asset_name, qty, price, contents
+#         return html.Div("❌ Please enter an asset name.", className="message message-error"), render_requests_table(), "", False, asset_name, qty, price, contents
 #     if qty < 1:
-#         return "Quantity must be at least 1.", render_requests_table(), "", False, asset_name, qty, price, contents
+#         return html.Div("❌ Quantity must be at least 1.", className="message message-error"), render_requests_table(), "", False, asset_name, qty, price, contents
 
 #     saved_path = None
 #     if contents and filename:
@@ -695,16 +1244,16 @@
 #             emp = _employee_for_user(user, s)
 #             emp_id = emp.id if emp else None
 #         if not emp_id:
-#             return "Select an employee.", render_requests_table(), "", False, asset_name, qty, price, contents
+#             return html.Div("❌ Select an employee.", className="message message-error"), render_requests_table(), "", False, asset_name, qty, price, contents
 #         emp = s.get(Employee, emp_id)
 #         if not emp:
-#             return "Invalid employee.", render_requests_table(), "", False, asset_name, qty, price, contents
+#             return html.Div("❌ Invalid employee.", className="message message-error"), render_requests_table(), "", False, asset_name, qty, price, contents
 #         if user.role == Role.OM and emp.office_id != user.office_id:
-#             return "You can only submit requests for your office.", render_requests_table(), "", False, asset_name, qty, price, contents
+#             return html.Div("❌ You can only submit requests for your office.", className="message message-error"), render_requests_table(), "", False, asset_name, qty, price, contents
 #         s.add(Request(employee_id=emp.id, office_id=emp.office_id, asset_name=asset_name,
 #                       quantity=qty, price=price_val, bill_path=saved_path))
 #         s.commit()
-#     return "", render_requests_table(), "Request submitted.", True, "", 1, "", None
+#     return html.Div("✅ Request submitted successfully!", className="message message-success"), render_requests_table(), "Request submitted.", True, "", 1, "", None
 
 # @app.callback(Output("requests-table", "children"), Input("url", "pathname"))
 # def render_requests_table(_=None):
@@ -739,12 +1288,18 @@
 #     ]
 
 #     user = current_user()
-#     controls = html.Div(className="stack", children=[
-#         dcc.Textarea(id="mgr-remark", placeholder="Remark…", className="input", style={"height":"60px", "width":"420px"}),
-#         html.Button("Approve", id="btn-approve", className="btn"),
-#         html.Button("Reject", id="btn-reject", className="btn btn-danger"),
-#         html.Button("Mark Return Pending", id="btn-return-pending", className="btn btn-outline"),
-#         html.Button("Mark Returned", id="btn-returned", className="btn btn-outline"),
+#     controls = html.Div(style={"marginTop": "24px", "padding": "20px", "background": "var(--bg-alt)", "borderRadius": "var(--radius)", "border": "1px solid var(--border)"}, children=[
+#         html.Label("📝 Manager Actions", className="form-label", style={"marginBottom": "12px"}),
+#         html.Div(className="form-group", children=[
+#             html.Label("Add Remark (Optional)", className="form-label"),
+#             dcc.Textarea(id="mgr-remark", placeholder="Add a note about this request...", className="input", style={"height":"80px", "width":"100%", "maxWidth": "100%"}),
+#         ]),
+#         html.Div(className="stack", children=[
+#             html.Button("✅ Approve", id="btn-approve", className="btn"),
+#             html.Button("❌ Reject", id="btn-reject", className="btn btn-danger"),
+#             html.Button("⏳ Return Pending", id="btn-return-pending", className="btn btn-outline"),
+#             html.Button("✔️ Returned", id="btn-returned", className="btn btn-outline"),
+#         ])
 #     ]) if user and user.role in (Role.GM, Role.OM) else html.Div()
 
 #     table = dash_table.DataTable(data=data, columns=cols, id="req-table",
@@ -781,9 +1336,9 @@
 # def handle_request_action(n1, n2, n3, n4, selected, data, remark):
 #     user = current_user()
 #     if not user or user.role not in (Role.GM, Role.OM):
-#         return "Not allowed.", render_requests_table(), "", False
+#         return html.Div("❌ Not allowed.", className="message message-error"), render_requests_table(), "", False
 #     if not selected:
-#         return "Select a request first.", render_requests_table(), "", False
+#         return html.Div("⚠️ Select a request first.", className="message message-info"), render_requests_table(), "", False
 
 #     mapping = {
 #         "btn-approve": RequestStatus.APPROVED,
@@ -801,25 +1356,25 @@
 #     with SessionLocal() as s:
 #         r = s.get(Request, req_id)
 #         if not r:
-#             return "Request not found.", render_requests_table(), "", False
+#             return html.Div("❌ Request not found.", className="message message-error"), render_requests_table(), "", False
 #         if user.role == Role.OM and r.office_id != user.office_id:
-#             return "You can only update requests in your office.", render_requests_table(), "", False
+#             return html.Div("❌ You can only update requests in your office.", className="message message-error"), render_requests_table(), "", False
 
 #         # hard guards ---------------------------------------------------------
 #         if trig == "btn-approve":
 #             if r.status == RequestStatus.APPROVED:
-#                 return "No change.", render_requests_table(), "This request is already approved.", True
+#                 return html.Div("ℹ️ No change needed.", className="message message-info"), render_requests_table(), "This request is already approved.", True
 #             if r.status == RequestStatus.RETURNED:
-#                 return "No change.", render_requests_table(), "This request is already marked Returned.", True
+#                 return html.Div("ℹ️ No change needed.", className="message message-info"), render_requests_table(), "This request is already marked Returned.", True
 
 #         if trig == "btn-reject":
 #             if r.status == RequestStatus.APPROVED:
-#                 return "No change.", render_requests_table(), "Approved requests can't be rejected.", True
+#                 return html.Div("⚠️ Cannot reject.", className="message message-warning"), render_requests_table(), "Approved requests can't be rejected.", True
 #             if r.status == RequestStatus.RETURNED:
-#                 return "No change.", render_requests_table(), "Returned requests can't be rejected.", True
+#                 return html.Div("⚠️ Cannot reject.", className="message message-warning"), render_requests_table(), "Returned requests can't be rejected.", True
 
 #         if trig == "btn-return-pending" and r.status != RequestStatus.APPROVED:
-#             return "No change.", render_requests_table(), "Only approved requests can be marked return pending.", True
+#             return html.Div("⚠️ Invalid action.", className="message message-warning"), render_requests_table(), "Only approved requests can be marked return pending.", True
 
 #         # apply remark
 #         if remark:
@@ -855,7 +1410,7 @@
 
 #         s.commit()
 
-#     return f"Status updated to {status.value}.", render_requests_table(), "", False
+#     return html.Div(f"✅ Status updated to {status.value}.", className="message message-success"), render_requests_table(), "", False
 
 # # ---------- Employees (OM) ----------
 # def _render_emp_table_for_om(user):
@@ -897,10 +1452,10 @@
 #     uname = (uname or "").strip()
 #     pwd = (pwd or "")
 #     if not name or not uname or not pwd:
-#         return ("Name, username and password are required.", "", False, name, phone, uname, pwd, _render_emp_table_for_om(user))
+#         return (html.Div("❌ Name, username and password are required.", className="message message-error"), "", False, name, phone, uname, pwd, _render_emp_table_for_om(user))
 #     with SessionLocal() as s:
 #         if s.query(User).filter(User.username == uname).first():
-#             return ("Username already exists.", "", False, name, phone, uname, pwd, _render_emp_table_for_om(user))
+#             return (html.Div("❌ Username already exists.", className="message message-error"), "", False, name, phone, uname, pwd, _render_emp_table_for_om(user))
 #         emp = Employee(name=name, office_id=user.office_id, username=uname)
 #         try: emp.phone = (phone or "").strip()
 #         except Exception: pass
@@ -909,7 +1464,7 @@
 #                    role=Role.EMP, office_id=user.office_id))
 #         s.commit()
 #     # Clear fields, show dialog, and refresh table immediately
-#     return ("", "Employee created and login set.", True, "", "", "", "", _render_emp_table_for_om(user))
+#     return (html.Div("✅ Employee created successfully!", className="message message-success"), "Employee created and login set.", True, "", "", "", "", _render_emp_table_for_om(user))
 
 # # ---------- GM Admin ----------
 # @app.callback(Output("om-office","options"), Output("om-existing","options"), Input("url","pathname"))
@@ -936,14 +1491,14 @@
 #     with SessionLocal() as s:
 #         if not name:
 #             offices = s.query(Office).order_by(Office.name).all()
-#             return "Office name is required.", [{"label": o.name, "value": o.id} for o in offices]
+#             return html.Div("❌ Office name is required.", className="message message-error"), [{"label": o.name, "value": o.id} for o in offices]
 #         if s.query(Office).filter(Office.name.ilike(name)).first():
 #             offices = s.query(Office).order_by(Office.name).all()
-#             return "Office already exists.", [{"label": o.name, "value": o.id} for o in offices]
+#             return html.Div("❌ Office already exists.", className="message message-error"), [{"label": o.name, "value": o.id} for o in offices]
 #         s.add(Office(name=name))
 #         s.commit()
 #         offices = s.query(Office).order_by(Office.name).all()
-#     return "Office created.", [{"label": o.name, "value": o.id} for o in offices]
+#     return html.Div("✅ Office created successfully!", className="message message-success"), [{"label": o.name, "value": o.id} for o in offices]
 
 # @app.callback(
 #     Output("msg-create-om","children"),
@@ -962,15 +1517,15 @@
 #     uname = (uname or "").strip()
 #     pwd = (pwd or "")
 #     if not office_id or not uname or not pwd:
-#         return ("All fields are required.", "", False, uname, pwd)
+#         return (html.Div("❌ All fields are required.", className="message message-error"), "", False, uname, pwd)
 #     with SessionLocal() as s:
 #         if not s.get(Office, office_id):
-#             return ("Invalid office.", "", False, uname, pwd)
+#             return (html.Div("❌ Invalid office.", className="message message-error"), "", False, uname, pwd)
 #         if s.query(User).filter(User.username == uname).first():
-#             return ("Username already exists.", "", False, uname, pwd)
+#             return (html.Div("❌ Username already exists.", className="message message-error"), "", False, uname, pwd)
 #         s.add(User(username=uname, password_hash=generate_password_hash(pwd), role=Role.OM, office_id=office_id))
 #         s.commit()
-#     return ("OM created.", "Office Manager created successfully.", True, "", "")
+#     return (html.Div("✅ Office Manager created successfully!", className="message message-success"), "Office Manager created successfully.", True, "", "")
 
 # @app.callback(
 #     Output("msg-om-reset","children"),
@@ -983,14 +1538,14 @@
 # def reset_om_password(om_id, new_pass, n):
 #     new_pass = (new_pass or "").strip()
 #     if not om_id or not new_pass:
-#         return "Select an OM and enter a new password."
+#         return html.Div("❌ Select an OM and enter a new password.", className="message message-error")
 #     with SessionLocal() as s:
 #         u = s.get(User, om_id)
 #         if not u or u.role != Role.OM:
-#             return "Invalid OM selected."
+#             return html.Div("❌ Invalid OM selected.", className="message message-error")
 #         u.password_hash = generate_password_hash(new_pass)
 #         s.commit()
-#     return "Password reset."
+#     return html.Div("✅ Password reset successfully!", className="message message-success")
 
 # # ---------- Reports (GM + OM) ----------
 # @app.callback(Output("reports-content","children"), Input("url","pathname"))
@@ -1104,11 +1659,11 @@
 #     if not user:
 #         raise PreventUpdate
 #     if not emp_id or not (textv or "").strip():
-#         return "Select an employee and enter a remark."
+#         return html.Div("❌ Select an employee and enter a remark.", className="message message-error")
 #     with SessionLocal() as s:
 #         s.add(Remark(author_user_id=user.id, target_type="EMPLOYEE", target_id=int(emp_id), content=(textv or "").strip()))
 #         s.commit()
-#     return "Remark added."
+#     return html.Div("✅ Remark added successfully!", className="message message-success")
 
 # # ---------- Profile ----------
 # @app.callback(Output("profile-form", "children"), Input("url", "pathname"))
@@ -1140,21 +1695,37 @@
 
 #         remarks_block = html.Div([
 #             html.Div(className="hr"),
-#             html.B("Manager Remarks for You"),
-#             html.Ul(remarks_list) if remarks_list else html.Div(className="muted", children="No remarks yet.")
+#             html.H4("💬 Manager Remarks", style={"marginBottom": "16px"}),
+#             html.Ul(remarks_list, style={"paddingLeft": "20px"}) if remarks_list else html.Div(className="muted", children="No remarks from management yet.")
 #         ]) if emp else html.Div()
 
 #         return html.Div([
-#             html.Div([
-#                 html.Div(f"User: {user.username}"),
-#                 html.Div(f"Role: {role_name(user.role.value)}"),
-#                 html.Div(f"Employee ID: {emp.id if emp else '—'}"),
-#                 html.Div(f"Office ID: {office.id if office else '—'}"),
-#                 html.Div(f"Office Name: {office.name if office else '—'}"),
-#             ], style={"marginBottom":"8px"}),
-#             dcc.Input(id="profile-emp-name", placeholder="Employee name", value=(emp.name if emp else ""), className="input"),
-#             dcc.Input(id="profile-phone", placeholder="Phone number", value=getattr(emp, "phone", "") if emp else "", className="input"),
-#             html.Button("Save Profile", id="btn-save-profile", n_clicks=0, type="button", className="btn"),
+#             html.Div(className="card", style={"background": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", "color": "white", "marginBottom": "20px"}, children=[
+#                 html.Div(style={"fontSize": "18px", "fontWeight": "700", "marginBottom": "12px"}, children=f"👋 {user.username}"),
+#                 html.Div(style={"display": "grid", "gridTemplateColumns": "repeat(auto-fit, minmax(200px, 1fr))", "gap": "12px"}, children=[
+#                     html.Div([
+#                         html.Div("Role", style={"fontSize": "12px", "opacity": "0.9", "marginBottom": "4px"}),
+#                         html.Div(role_name(user.role.value), style={"fontSize": "16px", "fontWeight": "600"})
+#                     ]),
+#                     html.Div([
+#                         html.Div("Employee ID", style={"fontSize": "12px", "opacity": "0.9", "marginBottom": "4px"}),
+#                         html.Div(emp.id if emp else '—', style={"fontSize": "16px", "fontWeight": "600"})
+#                     ]),
+#                     html.Div([
+#                         html.Div("Office", style={"fontSize": "12px", "opacity": "0.9", "marginBottom": "4px"}),
+#                         html.Div(office.name if office else '—', style={"fontSize": "16px", "fontWeight": "600"})
+#                     ]),
+#                 ])
+#             ]),
+#             html.Div(className="form-group", children=[
+#                 html.Label("Full Name *", className="form-label"),
+#                 dcc.Input(id="profile-emp-name", placeholder="Enter your full name", value=(emp.name if emp else ""), className="input"),
+#             ]),
+#             html.Div(className="form-group", children=[
+#                 html.Label("Phone Number", className="form-label"),
+#                 dcc.Input(id="profile-phone", placeholder="Enter your phone number", value=getattr(emp, "phone", "") if emp else "", className="input"),
+#             ]),
+#             html.Button("💾 Save Profile", id="btn-save-profile", n_clicks=0, type="button", className="btn"),
 #             remarks_block
 #         ])
 
@@ -1173,24 +1744,25 @@
 #     name = (name or "").strip()
 #     phone = (phone or "").strip()
 #     if not name:
-#         return "", False, "Name is required."
+#         return "", False, html.Div("❌ Name is required.", className="message message-error")
 #     with SessionLocal() as s:
 #         emp = _employee_for_user(user, s)
 #         if not emp:
-#             return "", False, "No employee record."
+#             return "", False, html.Div("❌ No employee record.", className="message message-error")
 #         emp.name = name
 #         try: emp.phone = phone
 #         except Exception: pass
 #         s.commit()
 #     # No modal; just a small status message
-#     return "", False, "Profile updated."
+#     return "", False, html.Div("✅ Profile updated successfully!", className="message message-success")
 
 # # ---------- Run ----------
 # if __name__ == "__main__":
 #     app.run(debug=True)
 
 
-# ==============================================================================================================================================================================================================
+
+# ===========================================================================================================================================================================================================
 
 # ---------------------------------------------------------------------------
 # app.py (RMS — pastel blue / glassmorphism, with requested fixes)
@@ -1304,20 +1876,50 @@ app.index_string = """
     
     /* Enhanced Navigation */
     nav { 
-      background: var(--card);
-      padding: 16px 24px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-lg);
-      margin-bottom: 24px;
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      padding: 12px 32px;
+      border: none;
+      border-bottom: 3px solid var(--primary);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      margin-bottom: 0;
       display: flex;
       align-items: center;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+    
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-right: 24px;
+      padding-right: 24px;
+      border-right: 2px solid rgba(255,255,255,0.1);
+    }
+    
+    .nav-brand-logo {
+      font-size: 24px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.02em;
+    }
+    
+    .nav-brand-subtitle {
+      font-size: 11px;
+      color: rgba(255,255,255,0.6);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
     }
     
     nav a { 
-      color: var(--text-secondary);
+      color: rgba(255,255,255,0.8);
       text-decoration: none;
       font-weight: 600;
       font-size: 14px;
@@ -1328,14 +1930,29 @@ app.index_string = """
     }
     
     nav a:hover { 
-      color: var(--primary);
-      background: var(--primary-light);
+      color: white;
+      background: rgba(59,130,246,0.2);
       transform: translateY(-1px);
     }
     
+    nav a:hover::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60%;
+      height: 2px;
+      background: var(--primary);
+    }
+    
     nav span { 
-      color: var(--border);
+      color: rgba(255,255,255,0.2);
       margin: 0 4px;
+    }
+    
+    .page-container {
+      padding: 24px;
     }
     
     /* Enhanced Cards */
@@ -1748,58 +2365,101 @@ def role_name(role):
 # ---------- Layouts ----------
 def navbar():
     user = current_user()
+    
+    # Brand section
+    brand = html.Div(className="nav-brand", children=[
+        html.Div([
+            html.Div("RMS", className="nav-brand-logo"),
+            html.Div("Resource Management System", className="nav-brand-subtitle")
+        ])
+    ])
+    
     if not user:
-        return html.Nav([])
+        return html.Nav([brand])
     
     # Build navigation items based on role
     nav_items = []
     if user.role == Role.EMP:
         nav_items = [
-            dcc.Link("📊 Dashboard", href="/"),
-            dcc.Link("💼 My Assets", href="/assets"),
-            dcc.Link("📝 Requests", href="/requests"),
-            dcc.Link("👤 My Profile", href="/profile"),
+            dcc.Link("📊 Dashboard", href="/", title="View your dashboard and statistics"),
+            dcc.Link("💼 My Assets", href="/assets", title="View and manage your assigned assets"),
+            dcc.Link("📝 Requests", href="/requests", title="Submit and track asset requests"),
+            dcc.Link("👤 My Profile", href="/profile", title="Update your profile information"),
         ]
     else:
         nav_items = [
-            dcc.Link("📊 Dashboard", href="/"),
-            dcc.Link("💼 Assets", href="/assets"),
-            dcc.Link("📝 Requests", href="/requests"),
-            dcc.Link("📈 Reports", href="/reports"),
+            dcc.Link("📊 Dashboard", href="/", title="View overall statistics and KPIs"),
+            dcc.Link("💼 Assets", href="/assets", title="Manage all assets in the system"),
+            dcc.Link("📝 Requests", href="/requests", title="Review and approve asset requests"),
+            dcc.Link("📈 Reports", href="/reports", title="View detailed analytics and reports"),
         ]
         if user.role == Role.GM:
-            nav_items.append(dcc.Link("⚙️ Admin", href="/admin"))
+            nav_items.append(dcc.Link("⚙️ Admin", href="/admin", title="Manage offices and office managers"))
         else:
-            nav_items.append(dcc.Link("👥 Employees", href="/employees"))
+            nav_items.append(dcc.Link("👥 Employees", href="/employees", title="Manage employees in your office"))
     
     # Add user info and logout
     user_info = html.Div([
-        html.Span(f"{user.username}", style={"color": "var(--text-secondary)", "fontWeight": "600", "marginRight": "12px"}),
-        html.Span(f"({role_name(user.role.value)})", style={"color": "var(--muted)", "fontSize": "13px", "marginRight": "16px"}),
-        dcc.Link("🚪 Logout", href="/logout", style={"color": "var(--danger)"})
-    ], style={"marginLeft": "auto", "display": "flex", "alignItems": "center"})
+        html.Div([
+            html.Span("👤 ", style={"fontSize": "16px"}),
+            html.Span(f"{user.username}", style={"color": "white", "fontWeight": "700", "marginRight": "8px"}),
+            html.Span(f"({role_name(user.role.value)})", style={"color": "rgba(255,255,255,0.6)", "fontSize": "12px", "marginRight": "16px"}),
+        ], style={"display": "flex", "alignItems": "center"}),
+        dcc.Link("🚪 Logout", href="/logout", title="Sign out of your account", style={"color": "#ef4444", "background": "rgba(239,68,68,0.1)", "padding": "6px 12px", "borderRadius": "6px"})
+    ], style={"marginLeft": "auto", "display": "flex", "alignItems": "center", "gap": "16px"})
     
-    return html.Nav(nav_items + [user_info], style={"display": "flex", "alignItems": "center", "gap": "4px"})
+    return html.Nav([brand] + nav_items + [user_info], style={"display": "flex", "alignItems": "center", "gap": "4px"})
 
 def login_layout():
     return html.Div([
         navbar(),
-        html.Div(style={"maxWidth": "480px", "margin": "60px auto"}, children=[
-        html.Div(className="card", children=[
-                html.Div(style={"textAlign": "center", "marginBottom": "32px"}, children=[
-                    html.H2("🔐 Welcome to RMS", style={"marginBottom": "8px"}),
-                    html.Div("Resource Management System", className="muted")
-                ]),
-                html.Div(className="form-group", children=[
-                    html.Label("Username", className="form-label"),
-                    dcc.Input(id="login-username", placeholder="Enter your username", className="input", style={"maxWidth": "100%"}),
-                ]),
-                html.Div(className="form-group", children=[
-                    html.Label("Password", className="form-label"),
-                    dcc.Input(id="login-password", type="password", placeholder="Enter your password", className="input", style={"maxWidth": "100%"}),
-                ]),
-                html.Button("🔓 Login", id="login-btn", className="btn", style={"width": "100%", "marginTop": "8px"}),
-                html.Div(id="login-msg", style={"marginTop": "16px"}),
+        html.Div(className="page-container", children=[
+            html.Div(style={"maxWidth": "480px", "margin": "60px auto"}, children=[
+                html.Div(className="card", style={"boxShadow": "0 20px 60px rgba(0,0,0,0.15)"}, children=[
+                    html.Div(style={"textAlign": "center", "marginBottom": "32px"}, children=[
+                        html.Div("🔐", style={"fontSize": "48px", "marginBottom": "16px"}),
+                        html.H2("Welcome Back!", style={"marginBottom": "8px"}),
+                        html.Div("Sign in to access the Resource Management System", className="muted")
+                    ]),
+                    html.Form(id="login-form", children=[
+                        html.Div(className="form-group", children=[
+                            html.Label("Username", className="form-label"),
+                            dcc.Input(
+                                id="login-username", 
+                                placeholder="Enter your username", 
+                                className="input", 
+                                style={"maxWidth": "100%"},
+                                autoComplete="username",
+                                autoFocus=True,
+                                n_submit=0
+                            ),
+                        ]),
+                        html.Div(className="form-group", children=[
+                            html.Label("Password", className="form-label"),
+                            dcc.Input(
+                                id="login-password", 
+                                type="password", 
+                                placeholder="Enter your password", 
+                                className="input", 
+                                style={"maxWidth": "100%"},
+                                autoComplete="current-password",
+                                n_submit=0
+                            ),
+                        ]),
+                        html.Button(
+                            "🔓 Sign In", 
+                            id="login-btn", 
+                            className="btn", 
+                            n_clicks=0,
+                            style={"width": "100%", "marginTop": "8px", "fontSize": "16px", "padding": "12px"},
+                            title="Click to login or press Enter"
+                        ),
+                    ]),
+                    html.Div(id="login-msg", style={"marginTop": "16px"}),
+                    html.Div(style={"marginTop": "24px", "padding": "16px", "background": "var(--bg)", "borderRadius": "var(--radius)", "fontSize": "13px"}, children=[
+                        html.Div("💡 Tip: Press Enter after typing your password to login quickly", className="muted", style={"textAlign": "center"})
+                    ])
+                ])
             ])
         ])
     ])
@@ -1812,15 +2472,17 @@ def dashboard_layout():
     welcome_emoji = "👨‍💼" if user.role == Role.GM else ("👔" if user.role == Role.OM else "👤")
     return html.Div([
         navbar(),
-        html.Div(className="card", children=[
-            html.Div(style={"marginBottom": "24px"}, children=[
-                html.H3(f"{welcome_emoji} Welcome, {user.username}!", style={"marginBottom": "8px"}),
-                html.Div(className="muted", children=[
-                    html.Span(f"{role_name(user.role.value)} • ", style={"fontWeight": "600"}),
-                    html.Span(scope)
+        html.Div(className="page-container", children=[
+            html.Div(className="card", children=[
+                html.Div(style={"marginBottom": "24px"}, children=[
+                    html.H3(f"{welcome_emoji} Welcome, {user.username}!", style={"marginBottom": "8px"}),
+                    html.Div(className="muted", children=[
+                        html.Span(f"{role_name(user.role.value)} • ", style={"fontWeight": "600"}),
+                        html.Span(scope)
+                    ]),
                 ]),
-            ]),
-            html.Div(id="dashboard-cards", className="pad-top")
+                html.Div(id="dashboard-cards", className="pad-top")
+            ])
         ])
     ])
 
@@ -1878,49 +2540,51 @@ def assets_layout():
     radio_options, radio_default = _alloc_radio_for_user(user)
     return html.Div([
         navbar(),
-        html.Div(className="card", children=[
-            html.H3(header, style={"marginBottom": "24px"}),
-            html.Div(className="form-group", children=[
-                html.Label("📄 Upload Bill (Optional)", className="form-label"),
-            _uploader_component("upload-bill"),
-            ]),
-            html.Div(className="two-col", children=[
+        html.Div(className="page-container", children=[
+            html.Div(className="card", children=[
+                html.H3(header, style={"marginBottom": "24px"}),
                 html.Div(className="form-group", children=[
-                    html.Label("Asset Name *", className="form-label"),
-                    dcc.Input(id="asset-name", placeholder="e.g., Laptop, Desk, Monitor", className="input", style={"maxWidth": "100%"}),
+                    html.Label("📄 Upload Bill (Optional)", className="form-label"),
+                    _uploader_component("upload-bill"),
+                ]),
+                html.Div(className="two-col", children=[
+                    html.Div(className="form-group", children=[
+                        html.Label("Asset Name *", className="form-label"),
+                        dcc.Input(id="asset-name", placeholder="e.g., Laptop, Desk, Monitor", className="input", style={"maxWidth": "100%"}),
+                    ]),
+                    html.Div(className="form-group", children=[
+                        html.Label("Price *", className="form-label"),
+                        dcc.Input(id="asset-price", placeholder="0.00", type="number", className="input", style={"maxWidth": "100%"}),
+                    ]),
                 ]),
                 html.Div(className="form-group", children=[
-                    html.Label("Price *", className="form-label"),
-                    dcc.Input(id="asset-price", placeholder="0.00", type="number", className="input", style={"maxWidth": "100%"}),
+                    html.Label("Quantity *", className="form-label"),
+                    dcc.Input(id="asset-qty", placeholder="1", type="number", value=1, className="input", style={"maxWidth": "200px"}),
                 ]),
+                html.Div(className="form-group", children=[
+                    html.Label("Allocation Type", className="form-label"),
+                    dcc.RadioItems(
+                        id="alloc-type",
+                        options=radio_options,
+                        value=radio_default,
+                        labelStyle={"display":"block", "margin":"10px 0", "fontWeight": "500", "color": "var(--text-secondary)"}
+                    ),
+                ]),
+                html.Div(className="form-group", children=[
+                    html.Label("Allocation Target", className="form-label"),
+                    dcc.Dropdown(id="alloc-target", placeholder="Choose office/employee (if applicable)", className="dash-dropdown", style={"maxWidth": "100%"}),
+                ]),
+                html.Button(button_label, id="add-asset-btn", className="btn", title="Add this asset to the system"),
+                html.Div(id="asset-add-msg", style={"marginTop":"16px"}),
+                dcc.ConfirmDialog(id="asset-dialog"),
             ]),
-            html.Div(className="form-group", children=[
-                html.Label("Quantity *", className="form-label"),
-                dcc.Input(id="asset-qty", placeholder="1", type="number", value=1, className="input", style={"maxWidth": "200px"}),
-            ]),
-            html.Div(className="form-group", children=[
-                html.Label("Allocation Type", className="form-label"),
-            dcc.RadioItems(
-                id="alloc-type",
-                options=radio_options,
-                value=radio_default,
-                    labelStyle={"display":"block", "margin":"10px 0", "fontWeight": "500", "color": "var(--text-secondary)"}
-                ),
-            ]),
-            html.Div(className="form-group", children=[
-                html.Label("Allocation Target", className="form-label"),
-                dcc.Dropdown(id="alloc-target", placeholder="Choose office/employee (if applicable)", className="dash-dropdown", style={"maxWidth": "100%"}),
-            ]),
-            html.Button(button_label, id="add-asset-btn", className="btn"),
-            html.Div(id="asset-add-msg", style={"marginTop":"16px"}),
-            dcc.ConfirmDialog(id="asset-dialog"),
-        ]),
-        html.Div(className="card", children=[
-            html.Div(style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginBottom": "16px"}, children=[
-                html.H4(f"{header} List", style={"margin": "0"}),
-                html.Div(className="badge badge-info", children="Live Data")
-            ]),
-            html.Div(id="assets-table")
+            html.Div(className="card", children=[
+                html.Div(style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginBottom": "16px"}, children=[
+                    html.H4(f"{header} List", style={"margin": "0"}),
+                    html.Div(className="badge badge-info", children="Live Data", title="Data updates automatically")
+                ]),
+                html.Div(id="assets-table")
+            ])
         ])
     ])
 
@@ -1930,17 +2594,19 @@ def requests_layout():
         return login_layout()
     return html.Div([
         navbar(),
-        html.Div(className="card", children=[
-            html.H3("📝 New Request", style={"marginBottom": "24px"}),
-            html.Div(id="request-form"),
-            dcc.ConfirmDialog(id="req-dialog")
-        ]),
-        html.Div(className="card", children=[
-            html.Div(style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginBottom": "16px"}, children=[
-                html.H4("📋 All Requests", style={"margin": "0"}),
-                html.Div(className="badge badge-warning", children="Pending Review")
+        html.Div(className="page-container", children=[
+            html.Div(className="card", children=[
+                html.H3("📝 New Request", style={"marginBottom": "24px"}),
+                html.Div(id="request-form"),
+                dcc.ConfirmDialog(id="req-dialog")
             ]),
-            html.Div(id="requests-table")
+            html.Div(className="card", children=[
+                html.Div(style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginBottom": "16px"}, children=[
+                    html.H4("📋 All Requests", style={"margin": "0"}),
+                    html.Div(className="badge badge-warning", children="Pending Review", title="Requests awaiting manager approval")
+                ]),
+                html.Div(id="requests-table")
+            ])
         ])
     ])
 
@@ -1957,11 +2623,13 @@ def reports_layout():
         ])])
     return html.Div([
         navbar(),
-        html.Div(className="card", children=[
-            html.H3("📈 Analytics & Reports", style={"marginBottom": "24px"}),
+        html.Div(className="page-container", children=[
+            html.Div(className="card", children=[
+                html.H3("📈 Analytics & Reports", style={"marginBottom": "24px"}),
             html.Div(id="reports-content"),
-            dcc.ConfirmDialog(id="reports-dialog"),
-            html.Div(id="reports-msg", style={"marginTop":"16px"}),
+                dcc.ConfirmDialog(id="reports-dialog"),
+                html.Div(id="reports-msg", style={"marginTop":"16px"}),
+            ])
         ])
     ])
 
@@ -1978,8 +2646,9 @@ def employees_layout():
         ])])
     return html.Div([
         navbar(),
-        html.Div(className="card", children=[
-            html.H3("👥 Add New Employee", style={"marginBottom": "24px"}),
+        html.Div(className="page-container", children=[
+            html.Div(className="card", children=[
+                html.H3("👥 Add New Employee", style={"marginBottom": "24px"}),
             html.Div(className="two-col", children=[
                 html.Div(className="form-group", children=[
                     html.Label("Employee Name *", className="form-label"),
@@ -1998,7 +2667,7 @@ def employees_layout():
                     dcc.Input(id="emp-new-password", type="password", placeholder="Initial password", className="input", style={"maxWidth": "100%"}),
                 ]),
             ]),
-            html.Button("➕ Add Employee", id="emp-add-btn", className="btn"),
+            html.Button("➕ Add Employee", id="emp-add-btn", className="btn", title="Create new employee account with login credentials"),
             dcc.ConfirmDialog(id="emp-dialog"),
             html.Div(id="emp-add-msg", style={"marginTop":"16px"})
         ]),
@@ -2007,7 +2676,8 @@ def employees_layout():
                 html.H4("📋 Employees in My Office", style={"margin": "0"}),
                 html.Div(className="badge badge-info", children="Active Staff")
             ]),
-            html.Div(id="emp-table")
+                html.Div(id="emp-table")
+            ])
         ])
     ])
 
@@ -2022,8 +2692,9 @@ def admin_layout():
         ])])
     return html.Div([
         navbar(),
-        html.Div(className="card", children=[
-            html.H3("⚙️ Admin Panel", style={"marginBottom": "8px"}),
+        html.Div(className="page-container", children=[
+            html.Div(className="card", children=[
+                html.H3("⚙️ Admin Panel", style={"marginBottom": "8px"}),
             html.Div("Manage offices and office managers", className="muted", style={"marginBottom": "24px"}),
             
             html.H4("🏢 Create Office", style={"marginTop": "24px"}),
@@ -2031,7 +2702,7 @@ def admin_layout():
                 html.Label("Office Name *", className="form-label"),
                 dcc.Input(id="new-office-name", placeholder="e.g., East Branch, West Branch", className="input"),
             ]),
-            html.Button("➕ Add Office", id="btn-add-office", className="btn"),
+            html.Button("➕ Add Office", id="btn-add-office", className="btn", title="Create a new office location"),
             html.Div(id="msg-add-office", style={"marginTop":"12px"}),
             
             html.Div(className="hr"),
@@ -2051,7 +2722,7 @@ def admin_layout():
                 html.Label("Password *", className="form-label"),
                 dcc.Input(id="om-password", type="password", placeholder="Initial password", className="input"),
             ]),
-            html.Button("➕ Create OM", id="btn-create-om", className="btn"),
+            html.Button("➕ Create OM", id="btn-create-om", className="btn", title="Create a new Office Manager account"),
             dcc.ConfirmDialog(id="admin-dialog"),
             html.Div(id="msg-create-om", style={"marginTop":"12px"}),
             
@@ -2068,8 +2739,9 @@ def admin_layout():
                     dcc.Input(id="om-new-pass", type="password", placeholder="Enter new password", className="input", style={"maxWidth": "100%"}),
                 ]),
             ]),
-            html.Button("🔄 Reset Password", id="btn-om-reset", className="btn btn-outline"),
-            html.Div(id="msg-om-reset", style={"marginTop":"12px"}),
+            html.Button("🔄 Reset Password", id="btn-om-reset", className="btn btn-outline", title="Change the password for this Office Manager"),
+                html.Div(id="msg-om-reset", style={"marginTop":"12px"}),
+            ])
         ])
     ])
 
@@ -2079,12 +2751,14 @@ def profile_layout():
         return login_layout()
     return html.Div([
         navbar(),
-        html.Div(className="card", children=[
-            html.H3("👤 My Profile", style={"marginBottom": "24px"}),
+        html.Div(className="page-container", children=[
+            html.Div(className="card", children=[
+                html.H3("👤 My Profile", style={"marginBottom": "24px"}),
             html.Div(id="profile-form"),
             # Kept component but we'll NEVER display it (req #5)
             dcc.ConfirmDialog(id="profile-dialog"),
-            html.Div(id="profile-msg", style={"marginTop":"16px"}),
+                html.Div(id="profile-msg", style={"marginTop":"16px"}),
+            ])
         ])
     ])
 
@@ -2116,10 +2790,16 @@ def route(path):
     return html.Div([navbar(), html.Div(className="card", children=html.H3("Not Found"))])
 
 # ---------- Login ----------
-@app.callback(Output("login-msg", "children"), Input("login-btn", "n_clicks"),
-              State("login-username", "value"), State("login-password", "value"),
-              prevent_initial_call=True)
-def do_login(n, username, password):
+@app.callback(
+    Output("login-msg", "children"), 
+    Input("login-btn", "n_clicks"),
+    Input("login-username", "n_submit"),
+    Input("login-password", "n_submit"),
+    State("login-username", "value"), 
+    State("login-password", "value"),
+    prevent_initial_call=True
+)
+def do_login(n_clicks, n_submit_user, n_submit_pass, username, password):
     uname = (username or "").strip()
     pwd = (password or "")
     with SessionLocal() as s:
@@ -2488,10 +3168,10 @@ def render_requests_table(_=None):
             dcc.Textarea(id="mgr-remark", placeholder="Add a note about this request...", className="input", style={"height":"80px", "width":"100%", "maxWidth": "100%"}),
         ]),
         html.Div(className="stack", children=[
-            html.Button("✅ Approve", id="btn-approve", className="btn"),
-            html.Button("❌ Reject", id="btn-reject", className="btn btn-danger"),
-            html.Button("⏳ Return Pending", id="btn-return-pending", className="btn btn-outline"),
-            html.Button("✔️ Returned", id="btn-returned", className="btn btn-outline"),
+            html.Button("✅ Approve", id="btn-approve", className="btn", title="Approve this request and allocate the asset"),
+            html.Button("❌ Reject", id="btn-reject", className="btn btn-danger", title="Reject this request - asset will not be allocated"),
+            html.Button("⏳ Return Pending", id="btn-return-pending", className="btn btn-outline", title="Mark that asset is waiting to be returned"),
+            html.Button("✔️ Returned", id="btn-returned", className="btn btn-outline", title="Confirm that asset has been returned"),
         ])
     ]) if user and user.role in (Role.GM, Role.OM) else html.Div()
 
@@ -2918,7 +3598,7 @@ def load_profile(_):
                 html.Label("Phone Number", className="form-label"),
                 dcc.Input(id="profile-phone", placeholder="Enter your phone number", value=getattr(emp, "phone", "") if emp else "", className="input"),
             ]),
-            html.Button("💾 Save Profile", id="btn-save-profile", n_clicks=0, type="button", className="btn"),
+            html.Button("💾 Save Profile", id="btn-save-profile", n_clicks=0, type="button", className="btn", title="Update your profile information"),
             remarks_block
         ])
 
