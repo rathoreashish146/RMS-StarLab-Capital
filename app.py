@@ -2866,8 +2866,16 @@ def route(path):
     prevent_initial_call=True
 )
 def do_login(n_clicks, n_submit_user, n_submit_pass, username, password):
+    # Check if any trigger has actually fired
+    if not n_clicks and not n_submit_user and not n_submit_pass:
+        raise PreventUpdate
+    
     uname = (username or "").strip()
     pwd = (password or "")
+    
+    if not uname or not pwd:
+        return html.Div("❌ Please enter both username and password.", className="message message-error")
+    
     with SessionLocal() as s:
         u = s.query(User).filter(User.username == uname).first()
         if not u and s.query(User).count() == 0:
