@@ -1828,18 +1828,18 @@ app.index_string = """
   {%metas%}{%favicon%}{%css%}
   <style>
     :root{
-      --bg:#f3f4f6; --bg-alt:#ffffff;
-      --card:#ffffff; --card-hover:#fafbfc;
-      --text:#0f172a; --text-secondary:#475569; --muted:#64748b;
-      --primary:#3b82f6; --primary-hover:#2563eb; --primary-light:#dbeafe;
-      --success:#10b981; --success-light:#d1fae5;
-      --warning:#f59e0b; --warning-light:#fef3c7;
-      --danger:#ef4444; --danger-hover:#dc2626; --danger-light:#fee2e2;
-      --border:#e2e8f0; --border-focus:#3b82f6;
+      --bg:#0f172a; --bg-alt:#1e293b;
+      --card:#1e293b; --card-hover:#334155;
+      --text:#f1f5f9; --text-secondary:#cbd5e1; --muted:#94a3b8;
+      --primary:#3b82f6; --primary-hover:#2563eb; --primary-light:#1e3a8a;
+      --success:#10b981; --success-light:#064e3b;
+      --warning:#f59e0b; --warning-light:#78350f;
+      --danger:#ef4444; --danger-hover:#dc2626; --danger-light:#7f1d1d;
+      --border:#334155; --border-focus:#3b82f6;
       --radius:10px; --radius-lg:14px;
-      --shadow:0 1px 3px rgba(15,23,42,.08), 0 1px 2px rgba(15,23,42,.06);
-      --shadow-lg:0 10px 25px -5px rgba(15,23,42,.1), 0 8px 10px -6px rgba(15,23,42,.04);
-      --shadow-xl:0 20px 30px -10px rgba(15,23,42,.12);
+      --shadow:0 1px 3px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.2);
+      --shadow-lg:0 10px 25px -5px rgba(0,0,0,.4), 0 8px 10px -6px rgba(0,0,0,.3);
+      --shadow-xl:0 20px 30px -10px rgba(0,0,0,.5);
     }
     
     * { box-sizing: border-box; }
@@ -1851,11 +1851,11 @@ app.index_string = """
     }
     
     body { 
-      background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
       font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, 'Helvetica Neue', Arial, sans-serif;
       color: var(--text);
       line-height: 1.6;
-      padding: 20px;
+      padding: 0;
       min-height: 100vh;
     }
     
@@ -1901,13 +1901,20 @@ app.index_string = """
     }
     
     .nav-brand-logo {
-      font-size: 24px;
-      font-weight: 800;
-      background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      letter-spacing: -0.02em;
+      font-size: 20px;
+      font-weight: 700;
+      color: white;
+      letter-spacing: -0.01em;
+    }
+    
+    .nav-brand-company {
+      font-size: 13px;
+      color: rgba(255,255,255,0.5);
+      font-weight: 500;
+      margin: 0 12px;
+      padding: 0 12px;
+      border-left: 1px solid rgba(255,255,255,0.2);
+      border-right: 1px solid rgba(255,255,255,0.2);
     }
     
     .nav-brand-subtitle {
@@ -1968,6 +1975,7 @@ app.index_string = """
     
     .card:hover {
       box-shadow: var(--shadow-xl);
+      border-color: #475569;
     }
     
     /* Enhanced Buttons */
@@ -2026,7 +2034,7 @@ app.index_string = """
       padding: 11px 14px;
       border: 2px solid var(--border);
       border-radius: var(--radius);
-      background: var(--bg-alt);
+      background: var(--bg);
       outline: none;
       width: 100%;
       max-width: 560px;
@@ -2040,7 +2048,8 @@ app.index_string = """
     
     .input:focus, textarea:focus {
       border-color: var(--border-focus);
-      box-shadow: 0 0 0 3px rgba(59,130,246,.1);
+      box-shadow: 0 0 0 3px rgba(59,130,246,.3);
+      background: #1a2332;
     }
     
     .input::placeholder, textarea::placeholder {
@@ -2080,7 +2089,7 @@ app.index_string = """
       min-width: 240px;
       padding: 20px 24px;
       margin: 8px;
-      background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+      background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       box-shadow: var(--shadow);
@@ -2103,7 +2112,8 @@ app.index_string = """
     
     .kpi:hover {
       transform: translateY(-4px);
-      box-shadow: var(--shadow-lg);
+      box-shadow: var(--shadow-xl);
+      background: linear-gradient(135deg, #334155 0%, #475569 100%);
     }
     
     .kpi:hover::before {
@@ -2130,7 +2140,7 @@ app.index_string = """
     /* Utilities */
     .hr { 
       height: 1px;
-      background: linear-gradient(to right, transparent, var(--border), transparent);
+      background: linear-gradient(to right, transparent, #475569, transparent);
       margin: 28px 0;
       border: none;
     }
@@ -2165,22 +2175,26 @@ app.index_string = """
     
     .badge-success {
       background: var(--success-light);
-      color: var(--success);
+      color: #86efac;
+      border: 1px solid #10b981;
     }
     
     .badge-warning {
       background: var(--warning-light);
-      color: var(--warning);
+      color: #fbbf24;
+      border: 1px solid #f59e0b;
     }
     
     .badge-danger {
       background: var(--danger-light);
-      color: var(--danger);
+      color: #fca5a5;
+      border: 1px solid #ef4444;
     }
     
     .badge-info {
       background: var(--primary-light);
-      color: var(--primary);
+      color: #93c5fd;
+      border: 1px solid #3b82f6;
     }
     
     /* Message Styles */
@@ -2190,29 +2204,34 @@ app.index_string = """
       margin: 12px 0;
       font-size: 14px;
       font-weight: 500;
+      border: 1px solid;
     }
     
     .message-error {
-      background: var(--danger-light);
-      color: var(--danger);
+      background: rgba(127, 29, 29, 0.3);
+      color: #fca5a5;
+      border-color: var(--danger);
       border-left: 4px solid var(--danger);
     }
     
     .message-success {
-      background: var(--success-light);
-      color: var(--success);
+      background: rgba(6, 78, 59, 0.3);
+      color: #86efac;
+      border-color: var(--success);
       border-left: 4px solid var(--success);
     }
     
     .message-info {
-      background: var(--primary-light);
-      color: var(--primary);
+      background: rgba(30, 58, 138, 0.3);
+      color: #93c5fd;
+      border-color: var(--primary);
       border-left: 4px solid var(--primary);
     }
     
     .message-warning {
-      background: var(--warning-light);
-      color: var(--warning);
+      background: rgba(120, 53, 15, 0.3);
+      color: #fbbf24;
+      border-color: var(--warning);
       border-left: 4px solid var(--warning);
     }
     
@@ -2249,6 +2268,7 @@ app.index_string = """
       border-color: var(--border) !important;
       border-width: 2px !important;
       border-radius: var(--radius) !important;
+      background-color: var(--bg) !important;
     }
     
     .Select-control:hover {
@@ -2257,7 +2277,26 @@ app.index_string = """
     
     .is-focused .Select-control {
       border-color: var(--border-focus) !important;
-      box-shadow: 0 0 0 3px rgba(59,130,246,.1) !important;
+      box-shadow: 0 0 0 3px rgba(59,130,246,.3) !important;
+      background-color: #1a2332 !important;
+    }
+    
+    .Select-menu-outer {
+      background-color: var(--card) !important;
+      border-color: var(--border) !important;
+    }
+    
+    .Select-option {
+      background-color: var(--card) !important;
+      color: var(--text) !important;
+    }
+    
+    .Select-option.is-focused {
+      background-color: var(--bg-alt) !important;
+    }
+    
+    .Select-value-label {
+      color: var(--text) !important;
     }
     
     /* Responsive Design */
@@ -2308,7 +2347,36 @@ app.index_string = """
     }
     
     ::-webkit-scrollbar-thumb:hover {
-      background: var(--muted);
+      background: #475569;
+    }
+    
+    /* Table Dark Theme */
+    .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner {
+      background-color: var(--card);
+    }
+    
+    .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner table {
+      background-color: var(--card);
+    }
+    
+    .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
+      background-color: var(--bg-alt) !important;
+      color: var(--text) !important;
+      border-color: var(--border) !important;
+    }
+    
+    .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td {
+      background-color: var(--card) !important;
+      color: var(--text-secondary) !important;
+      border-color: var(--border) !important;
+    }
+    
+    .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:hover td {
+      background-color: var(--bg-alt) !important;
+    }
+    
+    .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner .dash-selected-cell {
+      background-color: rgba(59,130,246,0.2) !important;
     }
   </style>
 </head>
@@ -2368,8 +2436,9 @@ def navbar():
     
     # Brand section
     brand = html.Div(className="nav-brand", children=[
-        html.Div([
+        html.Div(style={"display": "flex", "alignItems": "center", "gap": "0"}, children=[
             html.Div("RMS", className="nav-brand-logo"),
+            html.Div("Starlab Capital", className="nav-brand-company"),
             html.Div("Resource Management System", className="nav-brand-subtitle")
         ])
     ])
@@ -2415,7 +2484,7 @@ def login_layout():
         navbar(),
         html.Div(className="page-container", children=[
             html.Div(style={"maxWidth": "480px", "margin": "60px auto"}, children=[
-                html.Div(className="card", style={"boxShadow": "0 20px 60px rgba(0,0,0,0.15)"}, children=[
+                html.Div(className="card", style={"boxShadow": "0 20px 60px rgba(0,0,0,0.6)"}, children=[
                     html.Div(style={"textAlign": "center", "marginBottom": "32px"}, children=[
                         html.Div("🔐", style={"fontSize": "48px", "marginBottom": "16px"}),
                         html.H2("Welcome Back!", style={"marginBottom": "8px"}),
@@ -2456,9 +2525,6 @@ def login_layout():
                         ),
                     ]),
                     html.Div(id="login-msg", style={"marginTop": "16px"}),
-                    html.Div(style={"marginTop": "24px", "padding": "16px", "background": "var(--bg)", "borderRadius": "var(--radius)", "fontSize": "13px"}, children=[
-                        html.Div("💡 Tip: Press Enter after typing your password to login quickly", className="muted", style={"textAlign": "center"})
-                    ])
                 ])
             ])
         ])
@@ -2473,7 +2539,7 @@ def dashboard_layout():
     return html.Div([
         navbar(),
         html.Div(className="page-container", children=[
-            html.Div(className="card", children=[
+        html.Div(className="card", children=[
                 html.Div(style={"marginBottom": "24px"}, children=[
                     html.H3(f"{welcome_emoji} Welcome, {user.username}!", style={"marginBottom": "8px"}),
                     html.Div(className="muted", children=[
@@ -2481,7 +2547,7 @@ def dashboard_layout():
                         html.Span(scope)
                     ]),
                 ]),
-                html.Div(id="dashboard-cards", className="pad-top")
+            html.Div(id="dashboard-cards", className="pad-top")
             ])
         ])
     ])
@@ -2541,13 +2607,13 @@ def assets_layout():
     return html.Div([
         navbar(),
         html.Div(className="page-container", children=[
-            html.Div(className="card", children=[
+        html.Div(className="card", children=[
                 html.H3(header, style={"marginBottom": "24px"}),
                 html.Div(className="form-group", children=[
                     html.Label("📄 Upload Bill (Optional)", className="form-label"),
-                    _uploader_component("upload-bill"),
+            _uploader_component("upload-bill"),
                 ]),
-                html.Div(className="two-col", children=[
+            html.Div(className="two-col", children=[
                     html.Div(className="form-group", children=[
                         html.Label("Asset Name *", className="form-label"),
                         dcc.Input(id="asset-name", placeholder="e.g., Laptop, Desk, Monitor", className="input", style={"maxWidth": "100%"}),
@@ -2563,10 +2629,10 @@ def assets_layout():
                 ]),
                 html.Div(className="form-group", children=[
                     html.Label("Allocation Type", className="form-label"),
-                    dcc.RadioItems(
-                        id="alloc-type",
-                        options=radio_options,
-                        value=radio_default,
+            dcc.RadioItems(
+                id="alloc-type",
+                options=radio_options,
+                value=radio_default,
                         labelStyle={"display":"block", "margin":"10px 0", "fontWeight": "500", "color": "var(--text-secondary)"}
                     ),
                 ]),
@@ -2576,14 +2642,14 @@ def assets_layout():
                 ]),
                 html.Button(button_label, id="add-asset-btn", className="btn", title="Add this asset to the system"),
                 html.Div(id="asset-add-msg", style={"marginTop":"16px"}),
-                dcc.ConfirmDialog(id="asset-dialog"),
-            ]),
-            html.Div(className="card", children=[
+            dcc.ConfirmDialog(id="asset-dialog"),
+        ]),
+        html.Div(className="card", children=[
                 html.Div(style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginBottom": "16px"}, children=[
                     html.H4(f"{header} List", style={"margin": "0"}),
                     html.Div(className="badge badge-info", children="Live Data", title="Data updates automatically")
                 ]),
-                html.Div(id="assets-table")
+            html.Div(id="assets-table")
             ])
         ])
     ])
@@ -2595,17 +2661,17 @@ def requests_layout():
     return html.Div([
         navbar(),
         html.Div(className="page-container", children=[
-            html.Div(className="card", children=[
+        html.Div(className="card", children=[
                 html.H3("📝 New Request", style={"marginBottom": "24px"}),
-                html.Div(id="request-form"),
-                dcc.ConfirmDialog(id="req-dialog")
-            ]),
-            html.Div(className="card", children=[
+            html.Div(id="request-form"),
+            dcc.ConfirmDialog(id="req-dialog")
+        ]),
+        html.Div(className="card", children=[
                 html.Div(style={"display": "flex", "alignItems": "center", "justifyContent": "space-between", "marginBottom": "16px"}, children=[
                     html.H4("📋 All Requests", style={"margin": "0"}),
                     html.Div(className="badge badge-warning", children="Pending Review", title="Requests awaiting manager approval")
                 ]),
-                html.Div(id="requests-table")
+            html.Div(id="requests-table")
             ])
         ])
     ])
@@ -2624,10 +2690,10 @@ def reports_layout():
     return html.Div([
         navbar(),
         html.Div(className="page-container", children=[
-            html.Div(className="card", children=[
+        html.Div(className="card", children=[
                 html.H3("📈 Analytics & Reports", style={"marginBottom": "24px"}),
             html.Div(id="reports-content"),
-                dcc.ConfirmDialog(id="reports-dialog"),
+            dcc.ConfirmDialog(id="reports-dialog"),
                 html.Div(id="reports-msg", style={"marginTop":"16px"}),
             ])
         ])
@@ -2647,7 +2713,7 @@ def employees_layout():
     return html.Div([
         navbar(),
         html.Div(className="page-container", children=[
-            html.Div(className="card", children=[
+        html.Div(className="card", children=[
                 html.H3("👥 Add New Employee", style={"marginBottom": "24px"}),
             html.Div(className="two-col", children=[
                 html.Div(className="form-group", children=[
@@ -2676,7 +2742,7 @@ def employees_layout():
                 html.H4("📋 Employees in My Office", style={"margin": "0"}),
                 html.Div(className="badge badge-info", children="Active Staff")
             ]),
-                html.Div(id="emp-table")
+            html.Div(id="emp-table")
             ])
         ])
     ])
@@ -2693,7 +2759,7 @@ def admin_layout():
     return html.Div([
         navbar(),
         html.Div(className="page-container", children=[
-            html.Div(className="card", children=[
+        html.Div(className="card", children=[
                 html.H3("⚙️ Admin Panel", style={"marginBottom": "8px"}),
             html.Div("Manage offices and office managers", className="muted", style={"marginBottom": "24px"}),
             
@@ -2752,7 +2818,7 @@ def profile_layout():
     return html.Div([
         navbar(),
         html.Div(className="page-container", children=[
-            html.Div(className="card", children=[
+        html.Div(className="card", children=[
                 html.H3("👤 My Profile", style={"marginBottom": "24px"}),
             html.Div(id="profile-form"),
             # Kept component but we'll NEVER display it (req #5)
@@ -3034,7 +3100,7 @@ def req_form(_):
                 ]),
                 html.Div(className="form-group", children=[
                     html.Label("📄 Upload Bill (Optional)", className="form-label"),
-                    _uploader_component("req-bill"),
+                _uploader_component("req-bill"),
                 ]),
                 html.Button("✅ Submit Request", id="req-submit", className="btn"),
                 html.Div(id="req-msg", style={"marginTop":"16px"})
@@ -3063,7 +3129,7 @@ def req_form(_):
             ]),
             html.Div(className="form-group", children=[
                 html.Label("📄 Upload Bill (Optional)", className="form-label"),
-                _uploader_component("req-bill"),
+            _uploader_component("req-bill"),
             ]),
             html.Button("✅ Submit Request", id="req-submit", className="btn"),
             html.Div(id="req-msg", style={"marginTop":"16px"})
@@ -3161,7 +3227,7 @@ def render_requests_table(_=None):
     ]
 
     user = current_user()
-    controls = html.Div(style={"marginTop": "24px", "padding": "20px", "background": "var(--bg-alt)", "borderRadius": "var(--radius)", "border": "1px solid var(--border)"}, children=[
+    controls = html.Div(style={"marginTop": "24px", "padding": "20px", "background": "var(--bg)", "borderRadius": "var(--radius)", "border": "1px solid var(--border)"}, children=[
         html.Label("📝 Manager Actions", className="form-label", style={"marginBottom": "12px"}),
         html.Div(className="form-group", children=[
             html.Label("Add Remark (Optional)", className="form-label"),
@@ -3573,10 +3639,10 @@ def load_profile(_):
         ]) if emp else html.Div()
 
         return html.Div([
-            html.Div(className="card", style={"background": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", "color": "white", "marginBottom": "20px"}, children=[
+            html.Div(className="card", style={"background": "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)", "color": "white", "marginBottom": "20px", "border": "1px solid rgba(59,130,246,0.3)"}, children=[
                 html.Div(style={"fontSize": "18px", "fontWeight": "700", "marginBottom": "12px"}, children=f"👋 {user.username}"),
                 html.Div(style={"display": "grid", "gridTemplateColumns": "repeat(auto-fit, minmax(200px, 1fr))", "gap": "12px"}, children=[
-                    html.Div([
+            html.Div([
                         html.Div("Role", style={"fontSize": "12px", "opacity": "0.9", "marginBottom": "4px"}),
                         html.Div(role_name(user.role.value), style={"fontSize": "16px", "fontWeight": "600"})
                     ]),
