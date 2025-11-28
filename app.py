@@ -3959,12 +3959,12 @@
 
 
 
-
 # ---------------------------------------------------------------------------
 # app.py (RMS — pastel blue / glassmorphism, with requested fixes)
 # ---------------------------------------------------------------------------
 from sqlalchemy import text
-import os, datetime, base64
+from sqlalchemy.exc import OperationalError, DBAPIError
+import os, datetime, base64, time
 from functools import wraps
 from urllib.parse import quote
 
@@ -3978,6 +3978,27 @@ from db import (
     init_db, SessionLocal, Role, AllocationType, RequestStatus,
     Office, User, Employee, Asset, Request, Remark, engine, Base
 )
+
+# Database retry decorator for handling intermittent connection issues
+def db_retry(max_attempts=3, delay=1):
+    """Retry database operations on connection errors"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_attempts):
+                try:
+                    return func(*args, **kwargs)
+                except (OperationalError, DBAPIError) as e:
+                    last_exception = e
+                    if attempt < max_attempts - 1:
+                        print(f"⚠️ Database connection error (attempt {attempt + 1}/{max_attempts}): {e}")
+                        time.sleep(delay * (attempt + 1))  # Exponential backoff
+                    else:
+                        print(f"❌ Database connection failed after {max_attempts} attempts")
+            raise last_exception
+        return wrapper
+    return decorator
 
 # ---------- tiny migrations (idempotent) ----------
 def _safe_add_column(table, coldef):
@@ -4870,11 +4891,21 @@ def assets_layout():
     else:
         help_text = "Add new assets to the system and assign them to offices or employees. All fields marked with * are required."
     
+    # Storage warning banner (only show on production)
+    storage_warning = html.Div(style={"background": "#fef3c7", "border": "1px solid #f59e0b", "borderRadius": "var(--radius)", "padding": "12px 16px", "marginBottom": "20px"}, children=[
+        html.Div([
+            html.Span("⚠️ ", style={"fontSize": "16px"}),
+            html.Strong("Storage Notice: ", style={"color": "#92400e"}),
+            html.Span("Uploaded files may be lost on system updates. For important documents, keep local backups.", style={"color": "#78350f", "fontSize": "13px"})
+        ])
+    ]) if 'render.com' in os.environ.get('RENDER_EXTERNAL_URL', '') or 'RMS_UPLOAD_DIR' not in os.environ else html.Div()
+    
     return html.Div([
         navbar(),
         html.Div(className="card", children=[
             html.H3(header, style={"marginBottom": "8px"}),
             html.Div(help_text, className="muted", style={"marginBottom": "24px", "fontSize": "14px"}),
+            storage_warning,
             html.Div(className="form-group", children=[
                 html.Label("📄 Upload Bill (Optional)", className="form-label"),
                 html.Div("You can upload a receipt or invoice for this asset", className="muted", style={"fontSize": "12px", "marginBottom": "8px"}),
@@ -5136,20 +5167,25 @@ def route(path):
     State("login-password", "value"),
     prevent_initial_call=True
 )
+@db_retry(max_attempts=3, delay=1)
 def do_login(n_clicks, n_submit_user, n_submit_pass, username, password):
     uname = (username or "").strip()
     pwd = (password or "")
-    with SessionLocal() as s:
-        u = s.query(User).filter(User.username == uname).first()
-        if not u and s.query(User).count() == 0:
-            s.close()
-            init_db(seed=True)
-            with SessionLocal() as s2:
-                u = s2.query(User).filter(User.username == uname).first()
-        if not u or not check_password_hash(u.password_hash, pwd):
-            return html.Div("❌ Invalid credentials. Please try again.", className="message message-error")
-        session["user_id"] = u.id
-        return dcc.Location(href="/", id="redir")
+    try:
+        with SessionLocal() as s:
+            u = s.query(User).filter(User.username == uname).first()
+            if not u and s.query(User).count() == 0:
+                s.close()
+                init_db(seed=True)
+                with SessionLocal() as s2:
+                    u = s2.query(User).filter(User.username == uname).first()
+            if not u or not check_password_hash(u.password_hash, pwd):
+                return html.Div("❌ Invalid credentials. Please try again.", className="message message-error")
+            session["user_id"] = u.id
+            return dcc.Location(href="/", id="redir")
+    except Exception as e:
+        print(f"❌ Login error: {e}")
+        return html.Div("⚠️ Connection error. Please try again in a moment.", className="message message-warning")
 
 # ---------- Dashboard KPIs ----------
 @app.callback(Output("dashboard-cards", "children"), Input("url", "pathname"))
@@ -5329,7 +5365,36 @@ def serve_file(filename):
             return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=True)
         else:
             print(f"❌ File not found: {file_path}")
-            return f"File not found: {filename}", 404
+            # Return HTML with helpful message
+            return f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>File Not Found</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; padding: 50px; text-align: center; }}
+                    .container {{ max-width: 600px; margin: 0 auto; }}
+                    h1 {{ color: #ef4444; }}
+                    .message {{ background: #fee2e2; padding: 20px; border-radius: 10px; margin: 20px 0; }}
+                    .note {{ background: #fef3c7; padding: 15px; border-radius: 8px; margin-top: 20px; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>📄 File Not Found</h1>
+                    <div class="message">
+                        <p>The requested file <strong>{filename}</strong> is not available.</p>
+                    </div>
+                    <div class="note">
+                        <p><strong>Note:</strong> Files uploaded before the latest deployment may have been deleted 
+                        due to ephemeral storage on the hosting platform.</p>
+                        <p>Please re-upload the file if needed.</p>
+                    </div>
+                    <p><a href="/assets" style="color: #3b82f6;">← Back to Assets</a></p>
+                </div>
+            </body>
+            </html>
+            """, 404
     except Exception as e:
         print(f"❌ Error serving file {filename}: {e}")
         return f"Error: {str(e)}", 500
