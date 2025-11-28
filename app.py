@@ -1938,7 +1938,6 @@
 
 
 
-
 # ---------------------------------------------------------------------------
 # app.py (RMS — pastel blue / glassmorphism, with requested fixes)
 # ---------------------------------------------------------------------------
@@ -1955,62 +1954,110 @@ from flask import session, send_from_directory
 
 from db import (
     init_db, SessionLocal, Role, AllocationType, RequestStatus,
-    Office, User, Employee, Asset, Request, Remark, engine
+    Office, User, Employee, Asset, Request, Remark, engine, Base
 )
 
 # ---------- tiny migrations (idempotent) ----------
 def _safe_add_column(table, coldef):
     try:
         with engine.begin() as conn:
-            cols = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
-            names = {c[1] for c in cols}
-            cname = coldef.split()[0]
-            if cname not in names:
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {coldef}"))
-    except Exception:
-        pass
+            # Check if PostgreSQL or SQLite
+            if 'postgresql' in str(engine.url):
+                # PostgreSQL: Check column existence
+                cname = coldef.split()[0]
+                result = conn.execute(text(
+                    f"SELECT column_name FROM information_schema.columns "
+                    f"WHERE table_name='{table}' AND column_name='{cname}'"
+                )).fetchone()
+                if not result:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {coldef}"))
+            else:
+                # SQLite
+                cols = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
+                names = {c[1] for c in cols}
+                cname = coldef.split()[0]
+                if cname not in names:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {coldef}"))
+    except Exception as e:
+        print(f"Migration warning for {table}.{coldef.split()[0]}: {e}")
 
-_safe_add_column("employees", "phone VARCHAR")
-_safe_add_column("employees", "username VARCHAR")
-_safe_add_column("employees", "role VARCHAR")
-_safe_add_column("offices", "location VARCHAR")
-_safe_add_column("offices", "manager_id INTEGER")
-_safe_add_column("requests", "price FLOAT")
-_safe_add_column("requests", "bill_path VARCHAR")
-_safe_add_column("requests", "fulfilled_asset_id INTEGER")
-_safe_add_column("assets", "allocation_employee_id INTEGER")
-_safe_add_column("assets", "allocation_office_id INTEGER")
+def _run_migrations():
+    """Run database migrations after tables are created"""
+    print("Running database migrations...")
+    _safe_add_column("employees", "phone VARCHAR")
+    _safe_add_column("employees", "username VARCHAR")
+    _safe_add_column("employees", "role VARCHAR")
+    _safe_add_column("offices", "location VARCHAR")
+    _safe_add_column("offices", "manager_id INTEGER")
+    _safe_add_column("requests", "price FLOAT")
+    _safe_add_column("requests", "bill_path VARCHAR")
+    _safe_add_column("requests", "fulfilled_asset_id INTEGER")
+    _safe_add_column("assets", "allocation_employee_id INTEGER")
+    _safe_add_column("assets", "allocation_office_id INTEGER")
+    print("✅ Database migrations complete")
 
-# Migrate data from old allocation_id to new columns
-try:
-    with engine.begin() as conn:
-        # Check if we need to migrate
-        result = conn.execute(text("SELECT COUNT(*) FROM assets WHERE allocation_id IS NOT NULL AND allocation_employee_id IS NULL AND allocation_office_id IS NULL")).scalar()
-        if result > 0:
-            # Migrate EMPLOYEE allocations
-            conn.execute(text("""
-                UPDATE assets 
-                SET allocation_employee_id = allocation_id 
-                WHERE allocation_type = 'EMPLOYEE' AND allocation_id IS NOT NULL AND allocation_employee_id IS NULL
-            """))
-            # Migrate OFFICE allocations
-            conn.execute(text("""
-                UPDATE assets 
-                SET allocation_office_id = allocation_id 
-                WHERE allocation_type = 'OFFICE' AND allocation_id IS NOT NULL AND allocation_office_id IS NULL
-            """))
-            print("✅ Migrated allocation_id to new column structure")
-except Exception as e:
-    print(f"Migration note: {e}")
+    # Migrate data from old allocation_id to new columns (if old column exists)
+    try:
+        with engine.begin() as conn:
+            # Check if old allocation_id column exists
+            if 'postgresql' in str(engine.url):
+                old_col_exists = conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name='assets' AND column_name='allocation_id'"
+                )).fetchone()
+            else:
+                cols = conn.execute(text("PRAGMA table_info(assets)")).fetchall()
+                old_col_exists = any(c[1] == 'allocation_id' for c in cols)
+            
+            if old_col_exists:
+                # Check if we need to migrate
+                result = conn.execute(text(
+                    "SELECT COUNT(*) FROM assets WHERE allocation_id IS NOT NULL "
+                    "AND (allocation_employee_id IS NULL OR allocation_office_id IS NULL)"
+                )).scalar()
+                if result > 0:
+                    # Migrate EMPLOYEE allocations
+                    conn.execute(text("""
+                        UPDATE assets 
+                        SET allocation_employee_id = allocation_id 
+                        WHERE allocation_type = 'EMPLOYEE' AND allocation_id IS NOT NULL 
+                        AND allocation_employee_id IS NULL
+                    """))
+                    # Migrate OFFICE allocations
+                    conn.execute(text("""
+                        UPDATE assets 
+                        SET allocation_office_id = allocation_id 
+                        WHERE allocation_type = 'OFFICE' AND allocation_id IS NOT NULL 
+                        AND allocation_office_id IS NULL
+                    """))
+                    print("✅ Migrated allocation_id to new column structure")
+    except Exception as e:
+        print(f"Migration note: {e}")
 
 UPLOAD_FOLDER = os.environ.get("RMS_UPLOAD_DIR", "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Initialize DB
+# First, ensure base tables exist
+Base.metadata.create_all(engine)
+
+# Run migrations to add any missing columns
+_run_migrations()
+
+# Now it's safe to seed the database
 if not os.path.exists("rms.db"):
+    # For SQLite local dev
     init_db(seed=True)
 else:
-    init_db(seed=False)
+    # For PostgreSQL or existing DB, check if we need to seed
+    try:
+        with SessionLocal() as s:
+            if not s.query(Office).first():
+                init_db(seed=True)
+            else:
+                print("Database already initialized")
+    except Exception:
+        # If query fails, just run init_db without seeding
+        init_db(seed=False)
 
 # ---------- Dash ----------
 app = Dash(__name__, suppress_callback_exceptions=True, serve_locally=False)
